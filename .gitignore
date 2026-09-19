@@ -1,0 +1,43 @@
+# Dependencies
+node_modules/
+.pnp/
+.pnp.js
+
+# Environment variables
+.env
+.env*.local
+!.env.example
+
+# Build artifacts
+dist/
+build/
+.next/
+out/
+
+# Turbo
+.turbo/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+*.log
+
+# OS files
+.DS_Store
+*.pem
+
+# IDEs
+.idea/
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Coverage / Testing
+coverage/
+
+# Prisma
+# Note: Keep schema and migrations, ignore generated client if any outside node_modules
