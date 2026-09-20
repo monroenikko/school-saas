@@ -27,7 +27,7 @@ export class StudentsService {
     const skip = (page - 1) * limit;
 
     const where: any = {
-      tenantId,
+      ...(tenantId ? { tenantId } : {}),
       ...(status ? { status } : {}),
     };
 
@@ -93,7 +93,7 @@ export class StudentsService {
 
   async findOne(tenantId: string, id: string) {
     const student = await this.prisma.student.findFirst({
-      where: { id, tenantId },
+      where: { id, ...(tenantId ? { tenantId } : {}) },
       include: {
         sectionStudents: {
           where: { status: 'ACTIVE' },
@@ -131,11 +131,22 @@ export class StudentsService {
   }
 
   async create(tenantId: string, dto: CreateStudentDto) {
+    const resolvedTenantId =
+      tenantId ||
+      (await this.prisma.tenant.findFirst({
+        where: { status: 'ACTIVE' },
+        select: { id: true },
+      }))?.id;
+
+    if (!resolvedTenantId) {
+      throw new ConflictException('No active school tenant found.');
+    }
+
     // 1. Check duplicate studentId within the same school tenant
     const existingStudentId = await this.prisma.student.findUnique({
       where: {
         tenantId_studentId: {
-          tenantId,
+          tenantId: resolvedTenantId,
           studentId: dto.studentId,
         },
       },
@@ -166,7 +177,7 @@ export class StudentsService {
       const newStudent = await tx.student.create({
         data: {
           ...studentData,
-          tenantId,
+          tenantId: resolvedTenantId,
           birthDate: birthDate ? new Date(birthDate) : undefined,
           status: dto.status || StudentStatus.ACTIVE,
         },
@@ -314,13 +325,14 @@ export class StudentsService {
   }
 
   async getStats(tenantId: string) {
+    const tenantWhere = tenantId ? { tenantId } : {};
     const [total, active, badged] = await Promise.all([
-      this.prisma.student.count({ where: { tenantId } }),
+      this.prisma.student.count({ where: tenantWhere }),
       this.prisma.student.count({
-        where: { tenantId, status: StudentStatus.ACTIVE },
+        where: { ...tenantWhere, status: StudentStatus.ACTIVE },
       }),
       this.prisma.student.count({
-        where: { tenantId, rfidCardUid: { not: null } },
+        where: { ...tenantWhere, rfidCardUid: { not: null } },
       }),
     ]);
 
@@ -334,7 +346,7 @@ export class StudentsService {
 
   async getSections(tenantId: string) {
     return this.prisma.section.findMany({
-      where: { tenantId },
+      where: tenantId ? { tenantId } : {},
       select: {
         id: true,
         name: true,

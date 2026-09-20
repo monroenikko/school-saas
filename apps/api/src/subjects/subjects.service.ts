@@ -23,7 +23,7 @@ export class SubjectsService {
     const skip = (page - 1) * limit;
 
     const where: any = {
-      tenantId,
+      ...(tenantId ? { tenantId } : {}),
       ...(gradeLevel ? { gradeLevel } : {}),
     };
 
@@ -66,7 +66,7 @@ export class SubjectsService {
 
   async findOneSubject(tenantId: string, id: string) {
     const subject = await this.prisma.subject.findFirst({
-      where: { id, tenantId },
+      where: { id, ...(tenantId ? { tenantId } : {}) },
       include: {
         _count: {
           select: { classes: true },
@@ -86,10 +86,21 @@ export class SubjectsService {
   }
 
   async createSubject(tenantId: string, dto: CreateSubjectDto) {
+    const resolvedTenantId =
+      tenantId ||
+      (await this.prisma.tenant.findFirst({
+        where: { status: 'ACTIVE' },
+        select: { id: true },
+      }))?.id;
+
+    if (!resolvedTenantId) {
+      throw new ConflictException('No active school tenant found.');
+    }
+
     const existing = await this.prisma.subject.findUnique({
       where: {
         tenantId_code: {
-          tenantId,
+          tenantId: resolvedTenantId,
           code: dto.code,
         },
       },
@@ -101,7 +112,7 @@ export class SubjectsService {
 
     const created = await this.prisma.subject.create({
       data: {
-        tenantId,
+        tenantId: resolvedTenantId,
         code: dto.code.toUpperCase().trim(),
         name: dto.name.trim(),
         description: dto.description?.trim() || null,
@@ -169,7 +180,7 @@ export class SubjectsService {
 
   async getTerms(tenantId: string) {
     const terms = await this.prisma.term.findMany({
-      where: { tenantId },
+      where: tenantId ? { tenantId } : {},
       orderBy: [{ isCurrent: 'desc' }, { startDate: 'asc' }],
       include: {
         academicYear: {
@@ -204,7 +215,7 @@ export class SubjectsService {
     const skip = (page - 1) * limit;
 
     const where: any = {
-      tenantId,
+      ...(tenantId ? { tenantId } : {}),
       ...(subjectId ? { subjectId } : {}),
       ...(teacherId ? { teacherId } : {}),
       ...(sectionId ? { sectionId } : {}),
@@ -304,7 +315,7 @@ export class SubjectsService {
 
   async findOneClass(tenantId: string, id: string) {
     const subjectClass = await this.prisma.subjectClass.findFirst({
-      where: { id, tenantId },
+      where: { id, ...(tenantId ? { tenantId } : {}) },
       include: {
         subject: true,
         teacher: {
@@ -374,9 +385,20 @@ export class SubjectsService {
   }
 
   async createClass(tenantId: string, dto: CreateSubjectClassDto) {
+    const resolvedTenantId =
+      tenantId ||
+      (await this.prisma.tenant.findFirst({
+        where: { status: 'ACTIVE' },
+        select: { id: true },
+      }))?.id;
+
+    if (!resolvedTenantId) {
+      throw new ConflictException('No active school tenant found.');
+    }
+
     // 1. Verify subject exists
     const subject = await this.prisma.subject.findFirst({
-      where: { id: dto.subjectId, tenantId },
+      where: { id: dto.subjectId, ...(resolvedTenantId ? { tenantId: resolvedTenantId } : {}) },
     });
     if (!subject) {
       throw new NotFoundException(`Subject with ID "${dto.subjectId}" not found`);
@@ -386,7 +408,7 @@ export class SubjectsService {
     let academicYearId = dto.academicYearId;
     if (!academicYearId) {
       const activeYear = await this.prisma.academicYear.findFirst({
-        where: { tenantId, isCurrent: true },
+        where: { tenantId: resolvedTenantId, isCurrent: true },
       });
       if (!activeYear) {
         throw new BadRequestException(
@@ -400,7 +422,7 @@ export class SubjectsService {
     const existing = await this.prisma.subjectClass.findUnique({
       where: {
         tenantId_academicYearId_classCode: {
-          tenantId,
+          tenantId: resolvedTenantId,
           academicYearId,
           classCode: dto.classCode.toUpperCase().trim(),
         },
@@ -415,7 +437,7 @@ export class SubjectsService {
     // 4. Validate terms
     if (dto.termIds && dto.termIds.length > 0) {
       const terms = await this.prisma.term.findMany({
-        where: { id: { in: dto.termIds }, tenantId },
+        where: { id: { in: dto.termIds }, tenantId: resolvedTenantId },
       });
       if (terms.length !== dto.termIds.length) {
         throw new BadRequestException('One or more selected terms are invalid');
@@ -426,7 +448,7 @@ export class SubjectsService {
     const createdClass = await this.prisma.$transaction(async (tx) => {
       const newClass = await tx.subjectClass.create({
         data: {
-          tenantId,
+          tenantId: resolvedTenantId,
           subjectId: dto.subjectId,
           academicYearId,
           teacherId: dto.teacherId || null,
@@ -441,7 +463,7 @@ export class SubjectsService {
       if (dto.termIds && dto.termIds.length > 0) {
         await tx.subjectClassTerm.createMany({
           data: dto.termIds.map((termId) => ({
-            tenantId,
+            tenantId: resolvedTenantId,
             subjectClassId: newClass.id,
             termId,
           })),
@@ -452,7 +474,7 @@ export class SubjectsService {
       if (dto.schedules && dto.schedules.length > 0) {
         await tx.classSchedule.createMany({
           data: dto.schedules.map((slot) => ({
-            tenantId,
+            tenantId: resolvedTenantId,
             subjectClassId: newClass.id,
             dayOfWeek: slot.dayOfWeek,
             startTime: slot.startTime,
@@ -465,7 +487,7 @@ export class SubjectsService {
       return newClass;
     });
 
-    return this.findOneClass(tenantId, createdClass.id);
+    return this.findOneClass(resolvedTenantId, createdClass.id);
   }
 
   async updateClass(tenantId: string, id: string, dto: UpdateSubjectClassDto) {

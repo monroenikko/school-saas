@@ -26,7 +26,7 @@ export class SectionsService {
     const skip = (page - 1) * limit;
 
     const where: any = {
-      tenantId,
+      ...(tenantId ? { tenantId } : {}),
       ...(gradeLevel ? { gradeLevel } : {}),
       ...(academicYearId ? { academicYearId } : {}),
     };
@@ -86,7 +86,7 @@ export class SectionsService {
 
   async findOne(tenantId: string, id: string) {
     const section = await this.prisma.section.findFirst({
-      where: { id, tenantId },
+      where: { id, ...(tenantId ? { tenantId } : {}) },
       include: {
         adviser: true,
         academicYear: true,
@@ -141,15 +141,26 @@ export class SectionsService {
   }
 
   async create(tenantId: string, dto: CreateSectionDto) {
+    const resolvedTenantId =
+      tenantId ||
+      (await this.prisma.tenant.findFirst({
+        where: { status: 'ACTIVE' },
+        select: { id: true },
+      }))?.id;
+
+    if (!resolvedTenantId) {
+      throw new ConflictException('No active school tenant found.');
+    }
+
     let academicYearId = dto.academicYearId;
 
     if (!academicYearId) {
       const currentYear = await this.prisma.academicYear.findFirst({
-        where: { tenantId, isCurrent: true },
+        where: { tenantId: resolvedTenantId, isCurrent: true },
       });
       if (!currentYear) {
         const anyYear = await this.prisma.academicYear.findFirst({
-          where: { tenantId },
+          where: { tenantId: resolvedTenantId },
           orderBy: { createdAt: 'desc' },
         });
         academicYearId = anyYear?.id;
@@ -168,7 +179,7 @@ export class SectionsService {
     const existing = await this.prisma.section.findUnique({
       where: {
         tenantId_academicYearId_name_gradeLevel: {
-          tenantId,
+          tenantId: resolvedTenantId,
           academicYearId,
           name: dto.name,
           gradeLevel: dto.gradeLevel,
@@ -184,7 +195,7 @@ export class SectionsService {
 
     return this.prisma.section.create({
       data: {
-        tenantId,
+        tenantId: resolvedTenantId,
         academicYearId,
         name: dto.name,
         gradeLevel: dto.gradeLevel,
@@ -303,10 +314,11 @@ export class SectionsService {
   }
 
   async getStats(tenantId: string) {
+    const tenantWhere = tenantId ? { tenantId } : {};
     const [totalSections, totalEnrolled] = await Promise.all([
-      this.prisma.section.count({ where: { tenantId } }),
+      this.prisma.section.count({ where: tenantWhere }),
       this.prisma.sectionStudent.count({
-        where: { tenantId, status: 'ACTIVE' },
+        where: { ...tenantWhere, status: 'ACTIVE' },
       }),
     ]);
 

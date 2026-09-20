@@ -23,7 +23,7 @@ export class GradesService {
     dto: EnrollStudentDto,
   ) {
     const subjectClass = await this.prisma.subjectClass.findFirst({
-      where: { id: subjectClassId, tenantId },
+      where: { id: subjectClassId, ...(tenantId ? { tenantId } : {}) },
       include: { section: true },
     });
 
@@ -37,7 +37,7 @@ export class GradesService {
     if (dto.sectionId) {
       const sectionLearners = await this.prisma.sectionStudent.findMany({
         where: {
-          tenantId,
+          ...(tenantId ? { tenantId } : {}),
           sectionId: dto.sectionId,
           status: 'ACTIVE',
         },
@@ -50,6 +50,8 @@ export class GradesService {
     if (targetStudentIds.length === 0) {
       throw new BadRequestException('No learners found or specified for enrollment.');
     }
+
+    const resolvedTenantId = tenantId || subjectClass.tenantId;
 
     // Upsert enrollments in transaction
     const enrollments = await this.prisma.$transaction(
@@ -65,7 +67,7 @@ export class GradesService {
             status: EnrollmentStatus.ENROLLED,
           },
           create: {
-            tenantId,
+            tenantId: resolvedTenantId,
             studentId,
             subjectClassId,
             status: EnrollmentStatus.ENROLLED,
@@ -83,7 +85,7 @@ export class GradesService {
 
   async unenrollStudent(tenantId: string, subjectClassId: string, studentId: string) {
     const enrollment = await this.prisma.subjectEnrollment.findFirst({
-      where: { tenantId, subjectClassId, studentId },
+      where: { ...(tenantId ? { tenantId } : {}), subjectClassId, studentId },
     });
 
     if (!enrollment) {
@@ -92,7 +94,7 @@ export class GradesService {
 
     // Check if any grades have been submitted
     const gradeCount = await this.prisma.grade.count({
-      where: { tenantId, subjectClassId, studentId },
+      where: { ...(tenantId ? { tenantId } : {}), subjectClassId, studentId },
     });
 
     if (gradeCount > 0) {
@@ -123,7 +125,7 @@ export class GradesService {
     query?: QueryGradesMatrixDto,
   ) {
     const subjectClass = await this.prisma.subjectClass.findFirst({
-      where: { id: subjectClassId, tenantId },
+      where: { id: subjectClassId, ...(tenantId ? { tenantId } : {}) },
       include: {
         subject: true,
         teacher: {
@@ -162,7 +164,7 @@ export class GradesService {
     // Fetch all enrolled learners with their grades
     const enrollments = await this.prisma.subjectEnrollment.findMany({
       where: {
-        tenantId,
+        ...(tenantId ? { tenantId } : {}),
         subjectClassId,
         status: { in: [EnrollmentStatus.ENROLLED, EnrollmentStatus.COMPLETED] },
       },
@@ -255,12 +257,14 @@ export class GradesService {
     dto: SaveGradesBatchDto,
   ) {
     const subjectClass = await this.prisma.subjectClass.findFirst({
-      where: { id: subjectClassId, tenantId },
+      where: { id: subjectClassId, ...(tenantId ? { tenantId } : {}) },
     });
 
     if (!subjectClass) {
       throw new NotFoundException(`Subject class with ID "${subjectClassId}" not found`);
     }
+
+    const resolvedTenantId = tenantId || subjectClass.tenantId;
 
     const results = await this.prisma.$transaction(async (tx) => {
       const updatedGrades = [];
@@ -297,7 +301,7 @@ export class GradesService {
             subjectEnrollmentId: enrollment ? enrollment.id : null,
           },
           create: {
-            tenantId,
+            tenantId: resolvedTenantId,
             studentId: entry.studentId,
             subjectClassId,
             subjectEnrollmentId: enrollment ? enrollment.id : null,
@@ -326,7 +330,7 @@ export class GradesService {
 
   async publishGrades(tenantId: string, subjectClassId: string, period: GradingPeriod) {
     const subjectClass = await this.prisma.subjectClass.findFirst({
-      where: { id: subjectClassId, tenantId },
+      where: { id: subjectClassId, ...(tenantId ? { tenantId } : {}) },
     });
 
     if (!subjectClass) {
@@ -335,7 +339,7 @@ export class GradesService {
 
     const updated = await this.prisma.grade.updateMany({
       where: {
-        tenantId,
+        ...(tenantId ? { tenantId } : {}),
         subjectClassId,
         period,
       },
@@ -361,7 +365,7 @@ export class GradesService {
     academicYearId?: string,
   ) {
     const student = await this.prisma.student.findFirst({
-      where: { id: studentId, tenantId },
+      where: { id: studentId, ...(tenantId ? { tenantId } : {}) },
       include: {
         sectionStudents: {
           where: { status: 'ACTIVE' },
@@ -379,7 +383,7 @@ export class GradesService {
 
     const enrollments = await this.prisma.subjectEnrollment.findMany({
       where: {
-        tenantId,
+        ...(tenantId ? { tenantId } : {}),
         studentId,
         ...(academicYearId
           ? { subjectClass: { academicYearId } }

@@ -24,9 +24,12 @@ export class TenantGuard implements CanActivate {
       return true;
     }
 
-    // Super Admin can impersonate/scope via x-tenant-id header or see global
+    // Super Admin can impersonate/scope via x-tenant-id header, query param, or see global
     if (user.role === Role.SUPER_ADMIN) {
-      const headerTenantId = request.headers['x-tenant-id'] as string;
+      const headerTenantId =
+        (request.headers['x-tenant-id'] as string) ||
+        (request.query?.tenantId as string);
+
       request.tenantId = headerTenantId || null;
       return true;
     }

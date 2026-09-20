@@ -27,7 +27,7 @@ export class TeachersService {
     const skip = (page - 1) * limit;
 
     const where: any = {
-      tenantId,
+      ...(tenantId ? { tenantId } : {}),
       ...(status ? { status } : {}),
       ...(specialization ? { specialization } : {}),
     };
@@ -79,7 +79,7 @@ export class TeachersService {
 
   async findOne(tenantId: string, id: string) {
     const teacher = await this.prisma.teacher.findFirst({
-      where: { id, tenantId },
+      where: { id, ...(tenantId ? { tenantId } : {}) },
       include: {
         advisorySections: true,
         subjectClasses: {
@@ -99,10 +99,21 @@ export class TeachersService {
   }
 
   async create(tenantId: string, dto: CreateTeacherDto) {
+    const resolvedTenantId =
+      tenantId ||
+      (await this.prisma.tenant.findFirst({
+        where: { status: 'ACTIVE' },
+        select: { id: true },
+      }))?.id;
+
+    if (!resolvedTenantId) {
+      throw new ConflictException('No active school tenant found.');
+    }
+
     const existing = await this.prisma.teacher.findUnique({
       where: {
         tenantId_employeeId: {
-          tenantId,
+          tenantId: resolvedTenantId,
           employeeId: dto.employeeId,
         },
       },
@@ -117,7 +128,7 @@ export class TeachersService {
     return this.prisma.teacher.create({
       data: {
         ...dto,
-        tenantId,
+        tenantId: resolvedTenantId,
         status: dto.status || TeacherStatus.ACTIVE,
       },
     });
@@ -172,13 +183,14 @@ export class TeachersService {
   }
 
   async getStats(tenantId: string) {
+    const tenantWhere = tenantId ? { tenantId } : {};
     const [total, active, onLeave] = await Promise.all([
-      this.prisma.teacher.count({ where: { tenantId } }),
+      this.prisma.teacher.count({ where: tenantWhere }),
       this.prisma.teacher.count({
-        where: { tenantId, status: TeacherStatus.ACTIVE },
+        where: { ...tenantWhere, status: TeacherStatus.ACTIVE },
       }),
       this.prisma.teacher.count({
-        where: { tenantId, status: TeacherStatus.ON_LEAVE },
+        where: { ...tenantWhere, status: TeacherStatus.ON_LEAVE },
       }),
     ]);
 
