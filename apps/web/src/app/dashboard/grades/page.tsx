@@ -386,12 +386,27 @@ export default function GradesPage() {
   const [customSectionName, setCustomSectionName] = useState('');
 
   // Sections connected to the active/selected tenant for the modal
-  const targetModalTenantId = createSectionForm.tenantId || selectedTenantId || user?.tenantId;
   const tenantModalSections = useMemo(() => {
-    return sections.filter(
-      (s) => !targetModalTenantId || s.tenantId === targetModalTenantId || s.tenant?.id === targetModalTenantId,
-    );
-  }, [sections, targetModalTenantId]);
+    if (!sections || sections.length === 0) return [];
+    const targetTenantId = createSectionForm.tenantId || selectedTenantId || user?.tenantId;
+    let list = sections;
+    if (targetTenantId) {
+      const filtered = sections.filter(
+        (s) => s.tenantId === targetTenantId || s.tenant?.id === targetTenantId || !s.tenantId,
+      );
+      if (filtered.length > 0) {
+        list = filtered;
+      }
+    }
+    // Deduplicate sections by unique key
+    const seen = new Set<string>();
+    return list.filter((s) => {
+      const key = `${s.id}-${s.name}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }, [sections, createSectionForm.tenantId, selectedTenantId, user?.tenantId]);
 
   // Add Subject Form
   const [addSubjectForm, setAddSubjectForm] = useState({
@@ -452,8 +467,15 @@ export default function GradesPage() {
           setSelectedClassId('');
         }
       }
-      if (sectionsRes.success && sectionsRes.data) {
-        setSections(sectionsRes.data);
+      if (sectionsRes.success && Array.isArray(sectionsRes.data)) {
+        setSections((prev) => {
+          const map = new Map<string, SectionItem>();
+          sectionsRes.data.forEach((s) => map.set(s.id, s));
+          prev.forEach((s) => {
+            if (!map.has(s.id)) map.set(s.id, s);
+          });
+          return Array.from(map.values());
+        });
       }
       if (teachersRes.success && teachersRes.data) {
         setTeachers(teachersRes.data);
@@ -642,6 +664,40 @@ export default function GradesPage() {
     setTimeout(() => setSuccessMsg(null), 2500);
   };
 
+  // Open Create Grade & Section Modal and fresh-load sections
+  const handleOpenCreateSectionModal = async () => {
+    setIsCreateSectionModalOpen(true);
+    setIsCustomSection(false);
+    setCustomSectionName('');
+
+    const effectiveTenantId =
+      createSectionForm.tenantId || selectedTenantId || user?.tenantId || (schools[0]?.id || '');
+    if (!createSectionForm.tenantId && effectiveTenantId) {
+      setCreateSectionForm((prev) => ({
+        ...prev,
+        tenantId: effectiveTenantId,
+        name: '',
+      }));
+    }
+
+    try {
+      const tenantQuery = effectiveTenantId ? `&tenantId=${encodeURIComponent(effectiveTenantId)}` : '';
+      const res = await api.get<SectionItem[]>(`/api/sections?limit=100${tenantQuery}`);
+      if (res.success && Array.isArray(res.data)) {
+        setSections((prev) => {
+          const map = new Map<string, SectionItem>();
+          res.data.forEach((s) => map.set(s.id, s));
+          prev.forEach((s) => {
+            if (!map.has(s.id)) map.set(s.id, s);
+          });
+          return Array.from(map.values());
+        });
+      }
+    } catch (err) {
+      console.error('Failed to refresh sections for create modal:', err);
+    }
+  };
+
   // Create Grade & Section Submit Handler
   const handleCreateSectionSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -669,12 +725,22 @@ export default function GradesPage() {
         tenantId: createSectionForm.tenantId || selectedTenantId || user?.tenantId || undefined,
       };
 
-      const res = await api.post('/api/sections', payload);
+      const res = await api.post<SectionItem>('/api/sections', payload);
       if (res.success) {
         setSuccessMsg(`Section ${createSectionForm.name} created successfully!`);
         setIsCreateSectionModalOpen(false);
         setIsCustomSection(false);
         setCustomSectionName('');
+
+        // Optimistically add the new section so it's immediately in dropdown and table
+        if (res.data) {
+          setSections((prev) => {
+            const exists = prev.some((s) => s.id === res.data?.id);
+            if (exists) return prev;
+            return [res.data, ...prev];
+          });
+        }
+
         setCreateSectionForm({
           tenantId: '',
           schoolYear: academicYears[0]?.name || '2026-2027',
@@ -1052,7 +1118,7 @@ export default function GradesPage() {
               {canCreateSection && (
                 <button
                   type="button"
-                  onClick={() => setIsCreateSectionModalOpen(true)}
+                  onClick={handleOpenCreateSectionModal}
                   className="flex items-center gap-1.5 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer shadow-sm shrink-0 whitespace-nowrap"
                 >
                   <Plus className="w-4 h-4" />
@@ -2102,18 +2168,27 @@ export default function GradesPage() {
             </div>
 
             <form onSubmit={handleCreateSectionSubmit} className="py-4 space-y-3.5">
-              {/* School / Campus (Tenant) Selector for Super Admin */}
+              {/* Tenant Selector for SUPER_ADMIN */}
               {isSuperAdmin && schools.length > 0 && (
                 <div>
                   <label className="text-xs font-semibold text-slate-700 block mb-1">
-                    School / Campus
+                    Target School (Tenant) *
                   </label>
                   <select
-                    aria-label="Select Target School"
-                    value={createSectionForm.tenantId || selectedTenantId || schools[0]?.id}
-                    onChange={(e) =>
-                      setCreateSectionForm({ ...createSectionForm, tenantId: e.target.value })
-                    }
+                    value={createSectionForm.tenantId || selectedTenantId || schools[0]?.id || ''}
+                    onChange={async (e) => {
+                      const newTenant = e.target.value;
+                      setCreateSectionForm((prev) => ({ ...prev, tenantId: newTenant, name: '' }));
+                      try {
+                        const tenantQuery = newTenant ? `&tenantId=${encodeURIComponent(newTenant)}` : '';
+                        const res = await api.get<SectionItem[]>(`/api/sections?limit=100${tenantQuery}`);
+                        if (res.success && res.data) {
+                          setSections(res.data);
+                        }
+                      } catch (err) {
+                        console.error('Failed to fetch sections for selected school:', err);
+                      }
+                    }}
                     className="w-full text-xs px-3 py-2 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white"
                   >
                     {schools.map((s) => (
@@ -2273,10 +2348,12 @@ export default function GradesPage() {
                     }}
                     className="w-full text-xs px-3 py-2 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white"
                   >
-                    <option value="">-- Select Section --</option>
+                    <option value="">
+                      -- Select Section {tenantModalSections.length > 0 ? `(${tenantModalSections.length} available)` : ''} --
+                    </option>
                     {tenantModalSections.map((sec) => (
                       <option key={sec.id} value={sec.name}>
-                        Section {sec.name} ({sec.gradeLevel})
+                        Section {sec.name} ({sec.gradeLevel}){sec.room ? ` • ${sec.room}` : ''}
                       </option>
                     ))}
                     <option value="__CUSTOM__">➕ Enter New / Custom Section...</option>

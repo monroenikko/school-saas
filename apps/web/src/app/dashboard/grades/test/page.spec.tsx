@@ -523,4 +523,54 @@ describe('GradesPage - Class List, Permissions, Enlistment & Trimestral Gradeshe
       );
     });
   });
+
+  it('refreshes and populates created sections to the Section dropdown upon opening modal and supports optimistic creation', async () => {
+    const user = userEvent.setup();
+
+    render(<GradesPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText(/Section Diamond/i)).toBeInTheDocument();
+    });
+
+    const createSectionBtn = screen.getByRole('button', { name: /Create Grade & Section/i });
+    await user.click(createSectionBtn);
+
+    // Verify modal fetched sections and populated dropdown
+    const sectionSelect = screen.getByLabelText(/Select Section/i);
+    expect(sectionSelect).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /-- Select Section \(2 available\) --/i })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /Section Diamond \(Grade 7\) • Room 204/i })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /Section STEM-A \(Grade 11\) • SHS Lab 1/i })).toBeInTheDocument();
+
+    // Select custom section and submit
+    vi.mocked(api.post).mockResolvedValueOnce({
+      success: true,
+      data: {
+        id: 'sec-ruby',
+        name: 'Ruby',
+        gradeLevel: 'Grade 7',
+        room: 'Room 205',
+        capacity: 40,
+        tenantId: 'tenant-school-1',
+      },
+    } as any);
+
+    await user.selectOptions(sectionSelect, '__CUSTOM__');
+    const input = screen.getByPlaceholderText(/e\.g\. Diamond, STEM-A, Rizal/i);
+    await user.type(input, 'Ruby');
+
+    const saveBtn = screen.getByRole('button', { name: /Save Section/i });
+    await user.click(saveBtn);
+
+    await waitFor(() => {
+      expect(screen.getByText(/Section Ruby created successfully!/i)).toBeInTheDocument();
+    });
+
+    // Reopen modal and verify Ruby is now in the dropdown
+    await user.click(createSectionBtn);
+    const reopenedSelect = screen.getByLabelText(/Select Section/i);
+    expect(screen.getByRole('option', { name: /Section Ruby \(Grade 7\) • Room 205/i })).toBeInTheDocument();
+  });
 });
+
