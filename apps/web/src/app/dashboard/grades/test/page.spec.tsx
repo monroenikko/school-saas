@@ -108,6 +108,7 @@ describe('GradesPage - Class List, Permissions, Enlistment & Trimestral Gradeshe
           data: [
             {
               id: 'sec-1',
+              tenantId: 'tenant-school-1',
               name: 'Diamond',
               gradeLevel: 'Grade 7',
               room: 'Room 204',
@@ -123,6 +124,7 @@ describe('GradesPage - Class List, Permissions, Enlistment & Trimestral Gradeshe
             },
             {
               id: 'sec-2',
+              tenantId: 'tenant-school-1',
               name: 'STEM-A',
               gradeLevel: 'Grade 11',
               track: 'Academic',
@@ -290,7 +292,14 @@ describe('GradesPage - Class List, Permissions, Enlistment & Trimestral Gradeshe
     expect(screen.getByText(/Senior High School Program Configuration/i)).toBeInTheDocument();
     expect(screen.getByText(/Academic Track/i)).toBeInTheDocument();
 
-    // Fill in section name
+    // Verify Section dropdown is populated with tenant's sections
+    const sectionSelect = screen.getByLabelText(/Select Section/i);
+    expect(sectionSelect).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /Section Diamond \(Grade 7\)/i })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /Section STEM-A \(Grade 11\)/i })).toBeInTheDocument();
+
+    // Select custom option to enter 'Emerald'
+    await user.selectOptions(sectionSelect, '__CUSTOM__');
     const sectionNameInput = screen.getByPlaceholderText(/e\.g\. Diamond, STEM-A, Rizal/i);
     await user.type(sectionNameInput, 'Emerald');
 
@@ -308,6 +317,26 @@ describe('GradesPage - Class List, Permissions, Enlistment & Trimestral Gradeshe
         strand: 'STEM',
       }),
     );
+  });
+
+  it('populates form fields when selecting an existing section from the Section dropdown', async () => {
+    const user = userEvent.setup();
+    render(<GradesPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText(/Section Diamond/i)).toBeInTheDocument();
+    });
+
+    const createSectionBtn = screen.getByRole('button', { name: /Create Grade & Section/i });
+    await user.click(createSectionBtn);
+
+    const sectionSelect = screen.getByLabelText(/Select Section/i);
+    await user.selectOptions(sectionSelect, 'STEM-A');
+
+    // Should auto-fill Grade 11, Room SHS Lab 1, and SHS Program Configuration
+    expect(screen.getByDisplayValue('Grade 11')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('SHS Lab 1')).toBeInTheDocument();
+    expect(screen.getByText(/Senior High School Program Configuration/i)).toBeInTheDocument();
   });
 
   it('transitions to dedicated Enlist Students view with top search bar and bottom roster div', async () => {

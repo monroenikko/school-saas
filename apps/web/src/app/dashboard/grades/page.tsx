@@ -382,6 +382,16 @@ export default function GradesPage() {
     capacity: 40,
     adviserId: '',
   });
+  const [isCustomSection, setIsCustomSection] = useState(false);
+  const [customSectionName, setCustomSectionName] = useState('');
+
+  // Sections connected to the active/selected tenant for the modal
+  const targetModalTenantId = createSectionForm.tenantId || selectedTenantId || user?.tenantId;
+  const tenantModalSections = useMemo(() => {
+    return sections.filter(
+      (s) => !targetModalTenantId || s.tenantId === targetModalTenantId || s.tenant?.id === targetModalTenantId,
+    );
+  }, [sections, targetModalTenantId]);
 
   // Add Subject Form
   const [addSubjectForm, setAddSubjectForm] = useState({
@@ -663,6 +673,8 @@ export default function GradesPage() {
       if (res.success) {
         setSuccessMsg(`Section ${createSectionForm.name} created successfully!`);
         setIsCreateSectionModalOpen(false);
+        setIsCustomSection(false);
+        setCustomSectionName('');
         setCreateSectionForm({
           tenantId: '',
           schoolYear: academicYears[0]?.name || '2026-2027',
@@ -2078,7 +2090,11 @@ export default function GradesPage() {
               </div>
               <button
                 type="button"
-                onClick={() => setIsCreateSectionModalOpen(false)}
+                onClick={() => {
+                  setIsCreateSectionModalOpen(false);
+                  setIsCustomSection(false);
+                  setCustomSectionName('');
+                }}
                 className="text-slate-400 hover:text-slate-600 cursor-pointer"
               >
                 <X className="w-5 h-5" />
@@ -2219,22 +2235,71 @@ export default function GradesPage() {
                 </div>
               )}
 
-              {/* Section Name & Room Location */}
+              {/* Section Dropdown & Room Location */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-xs font-semibold text-slate-700 block mb-1">
-                    Section Name *
+                    Section *
                   </label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. Diamond, STEM-A, Rizal"
-                    value={createSectionForm.name}
-                    onChange={(e) =>
-                      setCreateSectionForm({ ...createSectionForm, name: e.target.value })
-                    }
+                  <select
+                    aria-label="Select Section"
+                    required={!isCustomSection && tenantModalSections.length > 0}
+                    value={isCustomSection ? '__CUSTOM__' : createSectionForm.name}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (val === '__CUSTOM__') {
+                        setIsCustomSection(true);
+                        setCreateSectionForm((prev) => ({ ...prev, name: customSectionName }));
+                      } else {
+                        setIsCustomSection(false);
+                        const matched = tenantModalSections.find(
+                          (s) => s.name === val || s.id === val,
+                        );
+                        if (matched) {
+                          setCreateSectionForm((prev) => ({
+                            ...prev,
+                            name: matched.name,
+                            gradeLevel: matched.gradeLevel || prev.gradeLevel,
+                            room: matched.room || prev.room,
+                            capacity: matched.capacity || prev.capacity,
+                            adviserId: matched.adviser?.id || prev.adviserId,
+                            track: matched.track || prev.track,
+                            strand: matched.strand || prev.strand,
+                          }));
+                        } else {
+                          setCreateSectionForm((prev) => ({ ...prev, name: val }));
+                        }
+                      }
+                    }}
                     className="w-full text-xs px-3 py-2 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white"
-                  />
+                  >
+                    <option value="">-- Select Section --</option>
+                    {tenantModalSections.map((sec) => (
+                      <option key={sec.id} value={sec.name}>
+                        Section {sec.name} ({sec.gradeLevel})
+                      </option>
+                    ))}
+                    <option value="__CUSTOM__">➕ Enter New / Custom Section...</option>
+                  </select>
+
+                  {(isCustomSection || tenantModalSections.length === 0) && (
+                    <div className="mt-2 animate-fade-in">
+                      <input
+                        type="text"
+                        required
+                        placeholder="e.g. Diamond, STEM-A, Rizal"
+                        value={createSectionForm.name}
+                        onChange={(e) => {
+                          setCustomSectionName(e.target.value);
+                          setCreateSectionForm({ ...createSectionForm, name: e.target.value });
+                        }}
+                        className="w-full text-xs px-3 py-2 border border-emerald-300 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                      />
+                      <p className="text-[10px] text-slate-400 mt-1">
+                        Type a new custom section name for this school
+                      </p>
+                    </div>
+                  )}
                 </div>
 
                 <div>
@@ -2295,7 +2360,11 @@ export default function GradesPage() {
               <div className="pt-4 border-t border-slate-100 flex items-center justify-end gap-3">
                 <button
                   type="button"
-                  onClick={() => setIsCreateSectionModalOpen(false)}
+                  onClick={() => {
+                    setIsCreateSectionModalOpen(false);
+                    setIsCustomSection(false);
+                    setCustomSectionName('');
+                  }}
                   className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl cursor-pointer"
                 >
                   Cancel
