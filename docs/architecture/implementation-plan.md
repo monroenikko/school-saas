@@ -9,8 +9,9 @@
 
 | Layer | Technology |
 |-------|-----------|
-| **Frontend** | Next.js 15 (App Router) + React 19 + TypeScript + TailwindCSS v4 |
+| **Frontend** | Next.js 16 (App Router) + React 19 + TypeScript + TailwindCSS v4 (**Light Theme by default**) |
 | **Backend** | Node.js + NestJS + TypeScript |
+| **API Docs** | Swagger / OpenAPI 3.0 (`/api/docs`) with Bearer Auth & Interactive UI |
 | **Database** | PostgreSQL 16 + Prisma ORM |
 | **Cache/Queue** | Redis 7 + BullMQ |
 | **Auth** | JWT (Access + Refresh tokens, HttpOnly cookies) |

@@ -9,6 +9,7 @@ import {
   Res,
   UnauthorizedException,
 } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiResponse as SwaggerResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { Request, Response } from 'express';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
@@ -18,6 +19,7 @@ import { Public } from './decorators/public.decorator';
 import { CurrentUser } from './decorators/current-user.decorator';
 import { ApiResponse, AuthTokens, AuthUser, JwtPayload } from '@school-saas/shared';
 
+@ApiTags('Auth')
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
@@ -25,6 +27,9 @@ export class AuthController {
   @Public()
   @Post('login')
   @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Authenticate user with email and password' })
+  @SwaggerResponse({ status: 200, description: 'User successfully logged in, returns tokens and profile' })
+  @SwaggerResponse({ status: 401, description: 'Invalid email or password' })
   async login(
     @Body() loginDto: LoginDto,
     @Res({ passthrough: true }) res: Response,
@@ -42,6 +47,9 @@ export class AuthController {
   @Public()
   @Post('register')
   @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Register a new school tenant and provision admin account' })
+  @SwaggerResponse({ status: 201, description: 'School successfully created and initialized' })
+  @SwaggerResponse({ status: 409, description: 'School slug or admin email already exists' })
   async register(
     @Body() registerDto: RegisterSchoolDto,
     @Res({ passthrough: true }) res: Response,
@@ -59,6 +67,9 @@ export class AuthController {
   @Public()
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Refresh JWT access token using refresh token' })
+  @SwaggerResponse({ status: 200, description: 'New token pair generated' })
+  @SwaggerResponse({ status: 401, description: 'Invalid or expired refresh token' })
   async refresh(
     @Req() req: Request,
     @Body() dto: RefreshTokenDto,
@@ -82,6 +93,7 @@ export class AuthController {
 
   @Post('logout')
   @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Logout and clear authentication cookies' })
   async logout(@Res({ passthrough: true }) res: Response): Promise<ApiResponse<null>> {
     this.clearAuthCookies(res);
     return {
@@ -91,8 +103,12 @@ export class AuthController {
     };
   }
 
+  @ApiBearerAuth('JWT-auth')
   @Get('me')
   @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Get current authenticated user profile and permissions' })
+  @SwaggerResponse({ status: 200, description: 'Current user profile with role and tenant information' })
+  @SwaggerResponse({ status: 401, description: 'Unauthorized' })
   async getMe(@CurrentUser() user: JwtPayload): Promise<ApiResponse<AuthUser & { permissions: string[] }>> {
     const profile = await this.authService.getProfile(user.sub);
     return {
