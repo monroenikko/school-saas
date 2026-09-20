@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import GradesPage from '../page';
@@ -42,8 +42,41 @@ describe('GradesPage', () => {
               id: 'sec-1',
               name: 'Diamond',
               gradeLevel: 'Grade 7',
+              room: 'Room 204',
+              capacity: 40,
               studentCount: 35,
+              adviser: {
+                id: 't-1',
+                firstName: 'Roberto',
+                lastName: 'Cruz',
+                employeeId: 'EMP-002',
+              },
             },
+          ],
+        } as any);
+      }
+      if (url.includes('/api/teachers')) {
+        return Promise.resolve({
+          success: true,
+          data: [
+            { id: 't-1', firstName: 'Maria', lastName: 'Santos', employeeId: 'EMP-001' },
+          ],
+        } as any);
+      }
+      if (url.includes('/api/subjects')) {
+        return Promise.resolve({
+          success: true,
+          data: [
+            { id: 'sub-1', code: 'MATH7', name: 'Mathematics 7', gradeLevel: 'Grade 7', credits: 3.0 },
+          ],
+        } as any);
+      }
+      if (url.includes('/api/students')) {
+        return Promise.resolve({
+          success: true,
+          data: [
+            { id: 'stud-1', studentId: '2026-0001', firstName: 'Juan', lastName: 'Dela Cruz' },
+            { id: 'stud-2', studentId: '2026-0002', firstName: 'Ana', lastName: 'Santos' },
           ],
         } as any);
       }
@@ -72,7 +105,9 @@ describe('GradesPage', () => {
                   lastName: 'Dela Cruz',
                 },
                 grades: {
-                  Q1: { score: 90, remarks: 'PASSED', isPublished: true },
+                  PRELIM: { score: 90, remarks: 'PASSED', isPublished: true },
+                  MIDTERM: { score: 92, remarks: 'PASSED', isPublished: true },
+                  FINALS: { score: 88, remarks: 'PASSED', isPublished: true },
                 },
                 finalAverage: 90.0,
                 remarks: 'PASSED',
@@ -85,47 +120,96 @@ describe('GradesPage', () => {
     });
   });
 
-  it('renders page header, class details, and student grade matrix', async () => {
+  it('renders page header and Class List by default with action buttons', async () => {
     render(<GradesPage />);
 
-    expect(screen.getByText(/Academic Grading & Subject Enrollment/i)).toBeInTheDocument();
+    expect(screen.getByText(/Class List & Trimestral Gradesheet/i)).toBeInTheDocument();
+    expect(screen.getByText(/Trimestral Academic Calendar/i)).toBeInTheDocument();
+
+    // Section cards in Class List
+    await waitFor(() => {
+      expect(screen.getByText(/Section Diamond/i)).toBeInTheDocument();
+    });
+
+    expect(screen.getByText(/35 \/ 40 Learners/i)).toBeInTheDocument();
+    expect(screen.getByText(/Roberto Cruz/i)).toBeInTheDocument();
+
+    // Action buttons
+    expect(screen.getByRole('button', { name: /Enlist Students/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Enlist Subject/i })).toBeInTheDocument();
+  });
+
+  it('opens Enlist Students modal and enables selection', async () => {
+    const user = userEvent.setup();
+    render(<GradesPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText(/Section Diamond/i)).toBeInTheDocument();
+    });
+
+    const enlistBtn = screen.getByRole('button', { name: /Enlist Students/i });
+    await user.click(enlistBtn);
+
+    expect(screen.getByText(/Enlist Learners — Section Diamond/i)).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByText(/Dela Cruz, Juan/i)).toBeInTheDocument();
+    });
+  });
+
+  it('opens Enlist Subject & Schedule modal with subject and teacher options', async () => {
+    const user = userEvent.setup();
+    render(<GradesPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText(/Section Diamond/i)).toBeInTheDocument();
+    });
+
+    const enlistSubjBtn = screen.getByRole('button', { name: /Enlist Subject/i });
+    await user.click(enlistSubjBtn);
+
+    expect(screen.getByText(/Enlist Subject & Schedule — Section Diamond/i)).toBeInTheDocument();
+    expect(screen.getByText('Subject Course')).toBeInTheDocument();
+    expect(screen.getByText('Assigned Faculty / Teacher')).toBeInTheDocument();
+  });
+
+  it('switches to Trimestral Gradesheet tab and displays 1st, 2nd, and 3rd Term columns', async () => {
+    const user = userEvent.setup();
+    render(<GradesPage />);
+
+    const gradesheetTab = screen.getByRole('button', { name: /Trimestral Gradesheet/i });
+    await user.click(gradesheetTab);
+
+    // Columns
+    expect(screen.getAllByText('1st Term').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText('2nd Term').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText('3rd Term').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText(/Final Term Average/i)).toBeInTheDocument();
 
     await waitFor(() => {
       expect(screen.getByText(/Dela Cruz, Juan/i)).toBeInTheDocument();
     });
-
-    expect(screen.getByText('2026-0001')).toBeInTheDocument();
-    expect(screen.getAllByText('PASSED').length).toBeGreaterThanOrEqual(1);
   });
 
-  it('opens Enroll Entire Section modal when clicking action button', async () => {
-    const user = userEvent.setup();
-    render(<GradesPage />);
-
-    const enrollSectionBtn = screen.getByRole('button', { name: /enroll entire section/i });
-    await user.click(enrollSectionBtn);
-
-    expect(screen.getByRole('heading', { name: /enroll entire section/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /enroll section learners/i })).toBeInTheDocument();
-  });
-
-  it('allows editing scores and saving draft grades', async () => {
+  it('allows saving draft trimestral grades', async () => {
     const user = userEvent.setup();
     vi.mocked(api.post).mockResolvedValueOnce({ success: true, message: 'Grades saved' } as any);
 
     render(<GradesPage />);
 
+    const gradesheetTab = screen.getByRole('button', { name: /Trimestral Gradesheet/i });
+    await user.click(gradesheetTab);
+
     await waitFor(() => {
       expect(screen.getByText(/Dela Cruz, Juan/i)).toBeInTheDocument();
     });
 
-    const saveBtn = screen.getByRole('button', { name: /save Q1 draft/i });
-    await user.click(saveBtn);
+    const saveDraftBtn = screen.getByRole('button', { name: /Save Draft/i });
+    await user.click(saveDraftBtn);
 
     expect(api.post).toHaveBeenCalledWith(
       '/api/grades/classes/class-1/batch',
       expect.objectContaining({
-        period: GradingPeriod.Q1,
+        period: GradingPeriod.PRELIM,
         isPublished: false,
       }),
     );

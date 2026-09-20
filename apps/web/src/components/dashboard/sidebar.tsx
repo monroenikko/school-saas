@@ -54,7 +54,7 @@ const NAV_GROUPS: NavGroup[] = [
       { title: 'Faculty & Teachers', href: '/dashboard/teachers', icon: UserCheck },
       { title: 'Sections', href: '/dashboard/sections', icon: FolderTree },
       { title: 'Subjects & Schedules', href: '/dashboard/subjects', icon: BookOpen },
-      { title: 'Grades & Report Cards', href: '/dashboard/grades', icon: GraduationCap },
+      { title: 'Class List & Grades', href: '/dashboard/grades', icon: GraduationCap },
       { title: 'Student ID Cards', href: '/dashboard/id-cards', icon: IdCard },
       { title: 'Reports & SF Forms', href: '/dashboard/reports', icon: FileText },
     ],
