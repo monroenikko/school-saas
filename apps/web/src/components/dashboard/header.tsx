@@ -1,8 +1,9 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/context/auth-context';
+import { apiClient } from '@/lib/api';
 import {
   Menu,
   Search,
@@ -13,6 +14,12 @@ import {
   ChevronRight,
 } from 'lucide-react';
 
+interface TenantOption {
+  id: string;
+  name: string;
+  slug: string;
+}
+
 export function DashboardHeader({
   onMenuToggle,
 }: {
@@ -20,6 +27,35 @@ export function DashboardHeader({
 }) {
   const pathname = usePathname();
   const { user, logout } = useAuth();
+  const [schools, setSchools] = useState<TenantOption[]>([]);
+  const [selectedTenantId, setSelectedTenantId] = useState<string>('');
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      setSelectedTenantId(apiClient.getActiveTenantId() || '');
+    }
+
+    if (user?.role === 'SUPER_ADMIN') {
+      apiClient
+        .request<TenantOption[]>('/api/tenants')
+        .then((res) => {
+          if (res.data) {
+            setSchools(res.data);
+          }
+        })
+        .catch(() => {
+          // fallback silent
+        });
+    }
+  }, [user?.role]);
+
+  const handleSwitchSchool = (tenantId: string) => {
+    setSelectedTenantId(tenantId);
+    apiClient.setActiveTenantId(tenantId || null);
+    if (typeof window !== 'undefined') {
+      window.location.reload();
+    }
+  };
 
   // Generate breadcrumb items
   const pathParts = pathname.split('/').filter(Boolean);
@@ -59,6 +95,32 @@ export function DashboardHeader({
 
       {/* Right: Academic Context, Search & Notifications */}
       <div className="flex items-center gap-3">
+        {/* Super Admin School Switcher */}
+        {user?.role === 'SUPER_ADMIN' ? (
+          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs font-semibold shadow-xs">
+            <School className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+            <span className="text-emerald-700 font-bold hidden md:inline">School:</span>
+            <select
+              aria-label="Select School"
+              value={selectedTenantId}
+              onChange={(e) => handleSwitchSchool(e.target.value)}
+              className="bg-transparent text-emerald-950 font-semibold focus:outline-none cursor-pointer pr-1"
+            >
+              <option value="">🌐 All Schools (Global)</option>
+              {schools.map((s) => (
+                <option key={s.id} value={s.id}>
+                  🏫 {s.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        ) : (
+          <div className="hidden lg:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-100 border border-slate-200 text-slate-700 text-xs font-semibold">
+            <School className="w-3.5 h-3.5 text-emerald-600" />
+            <span>{user?.tenantName || 'St. Jude Academy'}</span>
+          </div>
+        )}
+
         {/* Academic Year Pill */}
         <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-100 border border-slate-200 text-slate-700 text-xs font-semibold">
           <Calendar className="w-3.5 h-3.5 text-emerald-600" />

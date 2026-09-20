@@ -37,7 +37,7 @@ describe('DashboardSidebar', () => {
     // School Admin modules
     expect(screen.getByText('EdVance')).toBeInTheDocument();
     expect(screen.getByText('St. Jude Academy')).toBeInTheDocument();
-    expect(screen.getByText('Students Roster')).toBeInTheDocument();
+    expect(screen.getByText('Students')).toBeInTheDocument();
     expect(screen.getByText('Faculty & Teachers')).toBeInTheDocument();
     expect(screen.getByText('RFID Attendance')).toBeInTheDocument();
     expect(screen.getByText('Parent Billing')).toBeInTheDocument();

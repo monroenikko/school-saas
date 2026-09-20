@@ -47,9 +47,9 @@ const NAV_GROUPS: NavGroup[] = [
   {
     label: 'Academic Records',
     items: [
-      { title: 'Students Roster', href: '/dashboard/students', icon: Users },
+      { title: 'Students', href: '/dashboard/students', icon: Users },
       { title: 'Faculty & Teachers', href: '/dashboard/teachers', icon: UserCheck },
-      { title: 'Sections & Rosters', href: '/dashboard/sections', icon: FolderTree },
+      { title: 'Sections', href: '/dashboard/sections', icon: FolderTree },
       { title: 'Subjects & Schedules', href: '/dashboard/subjects', icon: BookOpen },
       { title: 'Grades & Report Cards', href: '/dashboard/grades', icon: GraduationCap },
     ],

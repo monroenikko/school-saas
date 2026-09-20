@@ -292,7 +292,7 @@ export default function StudentsPage() {
         <div>
           <h1 className="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2.5">
             <Users className="w-7 h-7 text-emerald-600" />
-            Students Directory & Rosters
+            Students Directory
           </h1>
           <p className="text-sm text-slate-500 mt-1">
             Manage enrolled learners, section placements, guardian records, and RFID turnstile badges.

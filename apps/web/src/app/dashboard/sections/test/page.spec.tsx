@@ -100,7 +100,7 @@ describe('SectionsPage', () => {
   it('renders section directory and cards with adviser info', async () => {
     render(<SectionsPage />);
 
-    expect(screen.getByText(/Sections & Rosters/i)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /Sections/i })).toBeInTheDocument();
 
     await waitFor(() => {
       expect(screen.getByText('Diamond')).toBeInTheDocument();
@@ -122,7 +122,7 @@ describe('SectionsPage', () => {
     expect(screen.getByRole('button', { name: /create section/i })).toBeInTheDocument();
   });
 
-  it('opens Student Roster drawer when clicking View Student Roster', async () => {
+  it('opens Students drawer when clicking View Students', async () => {
     const user = userEvent.setup();
     render(<SectionsPage />);
 
@@ -130,7 +130,7 @@ describe('SectionsPage', () => {
       expect(screen.getByText('Diamond')).toBeInTheDocument();
     });
 
-    const rosterButton = screen.getByRole('button', { name: /view student roster/i });
+    const rosterButton = screen.getByRole('button', { name: /view students/i });
     await user.click(rosterButton);
 
     await waitFor(() => {

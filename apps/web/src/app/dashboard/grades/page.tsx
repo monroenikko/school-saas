@@ -729,7 +729,7 @@ export default function GradesPage() {
             <div className="mt-4 space-y-4">
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Choose Section Roster *
+                  Choose Section *
                 </label>
                 <select
                   value={targetSectionId}

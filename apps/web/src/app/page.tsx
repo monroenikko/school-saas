@@ -59,7 +59,7 @@ export default function Home() {
           </h1>
 
           <p className="mt-6 text-lg sm:text-xl text-slate-600 max-w-2xl mx-auto leading-relaxed">
-            A multi-tenant cloud platform built for modern schools. Seamlessly manage student rosters, class terms, gradebooks, parent billing, and automated RFID gate turnstiles.
+            A multi-tenant cloud platform built for modern schools. Seamlessly manage student records, class terms, gradebooks, parent billing, and automated RFID gate turnstiles.
           </p>
 
           <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
@@ -116,7 +116,7 @@ export default function Home() {
               </div>
               <h3 className="text-lg font-bold text-slate-900 mb-2">Academic Terms & Offerings</h3>
               <p className="text-sm text-slate-600 leading-relaxed">
-                Flexible class term scheduling with multiple term selections, teacher faculty assignments, and section student rosters.
+                Flexible class term scheduling with multiple term selections, teacher faculty assignments, and section student enrollments.
               </p>
             </div>
 

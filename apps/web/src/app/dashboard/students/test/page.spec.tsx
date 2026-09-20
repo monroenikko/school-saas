@@ -60,7 +60,7 @@ describe('StudentsPage', () => {
   it('renders directory heading and stats correctly', async () => {
     render(<StudentsPage />);
 
-    expect(screen.getByText(/Students Directory & Rosters/i)).toBeInTheDocument();
+    expect(screen.getByText(/Students Directory/i)).toBeInTheDocument();
 
     await waitFor(() => {
       expect(screen.getByText('Juan Dela Cruz')).toBeInTheDocument();

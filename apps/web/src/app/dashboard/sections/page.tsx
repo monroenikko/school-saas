@@ -172,7 +172,7 @@ export default function SectionsPage() {
         setIsRosterModalOpen(true);
       }
     } catch (err: any) {
-      setErrorMsg('Failed to load section roster');
+      setErrorMsg('Failed to load section students');
     }
   };
 
@@ -375,10 +375,10 @@ export default function SectionsPage() {
         <div>
           <h1 className="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
             <Layers className="w-7 h-7 text-emerald-600" />
-            Sections & Rosters
+            Sections
           </h1>
           <p className="text-sm text-slate-500 mt-1">
-            Manage classroom sections, advisory faculty, student capacity, and class rosters.
+            Manage classroom sections, advisory faculty, and student capacity.
           </p>
         </div>
 
@@ -595,7 +595,7 @@ export default function SectionsPage() {
                     className="w-full py-2 px-3 bg-slate-50 hover:bg-emerald-50 hover:text-emerald-700 text-slate-700 text-xs font-semibold rounded-xl border border-slate-200 transition flex items-center justify-center gap-1.5"
                   >
                     <Users className="w-3.5 h-3.5" />
-                    View Student Roster ({sec.studentCount})
+                    View Students ({sec.studentCount})
                     <ChevronRight className="w-3.5 h-3.5 ml-auto" />
                   </button>
                 </div>
@@ -860,7 +860,7 @@ export default function SectionsPage() {
                     <h2 className="text-xl font-bold text-slate-900">{selectedSection.name}</h2>
                   </div>
                   <p className="text-xs text-slate-500 mt-1">
-                    Enrolled Roster: {selectedSection.students?.length || 0} / {selectedSection.capacity} Students
+                    Enrolled Students: {selectedSection.students?.length || 0} / {selectedSection.capacity}
                   </p>
                 </div>
                 <button
@@ -871,7 +871,7 @@ export default function SectionsPage() {
                 </button>
               </div>
 
-              {/* Roster Actions */}
+              {/* Students Actions */}
               <div className="mt-4 flex items-center justify-between gap-3">
                 <div className="text-xs font-semibold text-slate-600">Active Student List</div>
                 <button
@@ -942,7 +942,7 @@ export default function SectionsPage() {
                 onClick={() => setIsRosterModalOpen(false)}
                 className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-xl transition"
               >
-                Close Roster
+                Close
               </button>
             </div>
           </div>

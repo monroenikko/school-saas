@@ -31,11 +31,29 @@ class ApiClient {
     return this.token;
   }
 
+  setActiveTenantId(tenantId: string | null) {
+    if (typeof window !== 'undefined') {
+      if (tenantId) {
+        localStorage.setItem('active_tenant_id', tenantId);
+      } else {
+        localStorage.removeItem('active_tenant_id');
+      }
+    }
+  }
+
+  getActiveTenantId(): string | null {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('active_tenant_id');
+    }
+    return null;
+  }
+
   async request<T>(
     endpoint: string,
     options: RequestInit = {},
   ): Promise<ApiResponse<T>> {
     const token = this.getToken();
+    const activeTenantId = this.getActiveTenantId();
     const url = `${this.baseUrl}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
 
     const headers: Record<string, string> = {
@@ -46,6 +64,10 @@ class ApiClient {
 
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    if (activeTenantId && !headers['x-tenant-id']) {
+      headers['x-tenant-id'] = activeTenantId;
     }
 
     const config: RequestInit = {
@@ -106,3 +128,4 @@ class ApiClient {
 }
 
 export const api = new ApiClient();
+export const apiClient = api;
