@@ -29,6 +29,12 @@ import {
   Check,
   Building2,
   FolderTree,
+  MoreVertical,
+  ChevronDown,
+  ChevronUp,
+  ArrowLeft,
+  GripVertical,
+  Trash2,
 } from 'lucide-react';
 import { GradingPeriod, DayOfWeek } from '@school-saas/shared';
 
@@ -60,6 +66,27 @@ export interface ClassOfferingOption {
     name: string;
     gradeLevel: string;
   } | null;
+  schedules?: Array<{
+    dayOfWeek: string;
+    startTime: string;
+    endTime: string;
+    room?: string;
+  }>;
+}
+
+export interface SectionStudentItem {
+  id: string;
+  studentId: string;
+  status: string;
+  student: {
+    id: string;
+    studentId: string;
+    firstName: string;
+    lastName: string;
+    middleName?: string;
+    gender?: string;
+    status: string;
+  };
 }
 
 export interface SectionItem {
@@ -76,6 +103,7 @@ export interface SectionItem {
   } | null;
   studentCount: number;
   classCount?: number;
+  students?: SectionStudentItem[];
 }
 
 export interface StudentOption {
@@ -84,6 +112,8 @@ export interface StudentOption {
   firstName: string;
   lastName: string;
   middleName?: string;
+  gender?: string;
+  status: string;
 }
 
 export interface TeacherOption {
@@ -156,52 +186,59 @@ export const TRIMESTRAL_PERIODS = [
 ];
 
 export default function GradesPage() {
-  // Navigation tabs: Class List, Trimestral Gradesheet, Report Card
-  const [activeTab, setActiveTab] = useState<'classList' | 'gradesheet' | 'reportCard'>('classList');
+  // Navigation / View Modes:
+  // 'classList' -> Table listing of all sections with actions dropdown
+  // 'enlistStudents' -> Dedicated search-to-enlist page with bottom roster div
+  // 'enlistSubjects' -> Dedicated drag-and-drop / ordering of subjects for section
+  // 'gradesheet' -> Trimestral gradesheet matrix
+  const [viewMode, setViewMode] = useState<
+    'classList' | 'enlistStudents' | 'enlistSubjects' | 'gradesheet'
+  >('classList');
 
   // Master Data
   const [classes, setClasses] = useState<ClassOfferingOption[]>([]);
   const [sections, setSections] = useState<SectionItem[]>([]);
   const [teachers, setTeachers] = useState<TeacherOption[]>([]);
   const [subjects, setSubjects] = useState<SubjectOption[]>([]);
-  const [availableStudents, setAvailableStudents] = useState<StudentOption[]>([]);
+  const [allStudents, setAllStudents] = useState<StudentOption[]>([]);
 
-  // Selection states
+  // Selected Section & Its Enlisted Entities
+  const [activeSection, setActiveSection] = useState<SectionItem | null>(null);
+  const [enlistedStudents, setEnlistedStudents] = useState<SectionStudentItem[]>([]);
+  const [sectionClasses, setSectionClasses] = useState<ClassOfferingOption[]>([]);
+
+  // Actions Dropdown state (maps sectionId to boolean)
+  const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
+
+  // Student Search-to-Enlist State
+  const [studentSearchQuery, setStudentSearchQuery] = useState('');
+
+  // Gradesheet Selection & Data
   const [selectedClassId, setSelectedClassId] = useState<string>('');
   const [matrixData, setMatrixData] = useState<MatrixResponse | null>(null);
   const [activePeriod, setActivePeriod] = useState<GradingPeriod>(GradingPeriod.PRELIM);
   const [localScores, setLocalScores] = useState<Record<string, string>>({});
 
-  // Loading & Filter states
+  // Filters & Loading
   const [loading, setLoading] = useState(true);
   const [matrixLoading, setMatrixLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [search, setSearch] = useState('');
+  const [classListSearch, setClassListSearch] = useState('');
   const [classListGradeFilter, setClassListGradeFilter] = useState('ALL');
 
   // Modals
-  const [isSectionEnrollModalOpen, setIsSectionEnrollModalOpen] = useState(false);
-  const [isStudentEnrollModalOpen, setIsStudentEnrollModalOpen] = useState(false);
+  const [isAddSubjectModalOpen, setIsAddSubjectModalOpen] = useState(false);
   const [isReportCardModalOpen, setIsReportCardModalOpen] = useState(false);
   const [reportCardData, setReportCardData] = useState<ReportCardResponse | null>(null);
 
-  // New User Journey Modals (Class List)
-  const [isEnlistStudentsModalOpen, setIsEnlistStudentsModalOpen] = useState(false);
-  const [isEnlistSubjectModalOpen, setIsEnlistSubjectModalOpen] = useState(false);
-  const [activeSection, setActiveSection] = useState<SectionItem | null>(null);
-
-  // Selection states for Modals
-  const [targetSectionId, setTargetSectionId] = useState('');
-  const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([]);
-
-  // Form states for Enlist Subject & Schedule Modal
-  const [enlistSubjectForm, setEnlistSubjectForm] = useState({
+  // Add Subject Form
+  const [addSubjectForm, setAddSubjectForm] = useState({
     subjectId: '',
     teacherId: '',
     classCode: '',
     room: '',
     capacity: 40,
-    days: ['MONDAY', 'WEDNESDAY', 'FRIDAY'] as DayOfWeek[],
+    days: [DayOfWeek.MONDAY, DayOfWeek.WEDNESDAY, DayOfWeek.FRIDAY] as DayOfWeek[],
     startTime: '08:00',
     endTime: '09:30',
   });
@@ -213,11 +250,9 @@ export default function GradesPage() {
   // Helper to extract score across trimestral periods with fallback compatibility
   const getScoreForTerm = useCallback(
     (row: StudentGradeRow, term: (typeof TRIMESTRAL_PERIODS)[0]) => {
-      // 1. Direct match by term ID
       if (row.grades[term.id]?.score !== undefined) {
         return row.grades[term.id].score;
       }
-      // 2. Fallback check for Q1/Q2/Q3/Q4 or alternate keys
       for (const key of term.altKeys) {
         if (row.grades[key]?.score !== undefined) {
           return row.grades[key].score;
@@ -228,16 +263,18 @@ export default function GradesPage() {
     [],
   );
 
-  // 1. Fetch initial options: Classes, Sections, Teachers, Subjects
+  // 1. Fetch initial options: Classes, Sections, Teachers, Subjects, Students
   const fetchInitialData = useCallback(async () => {
     setLoading(true);
     try {
-      const [classesRes, sectionsRes, teachersRes, subjectsRes] = await Promise.all([
-        api.get<ClassOfferingOption[]>('/api/subjects/classes?limit=100'),
-        api.get<SectionItem[]>('/api/sections?limit=100'),
-        api.get<TeacherOption[]>('/api/teachers?limit=100'),
-        api.get<SubjectOption[]>('/api/subjects?limit=100'),
-      ]);
+      const [classesRes, sectionsRes, teachersRes, subjectsRes, studentsRes] =
+        await Promise.all([
+          api.get<ClassOfferingOption[]>('/api/subjects/classes?limit=100'),
+          api.get<SectionItem[]>('/api/sections?limit=100'),
+          api.get<TeacherOption[]>('/api/teachers?limit=100'),
+          api.get<SubjectOption[]>('/api/subjects?limit=100'),
+          api.get<StudentOption[]>('/api/students?limit=250&status=ACTIVE'),
+        ]);
 
       if (classesRes.success && classesRes.data && classesRes.data.length > 0) {
         setClasses(classesRes.data);
@@ -254,6 +291,9 @@ export default function GradesPage() {
       if (subjectsRes.success && subjectsRes.data) {
         setSubjects(subjectsRes.data);
       }
+      if (studentsRes.success && studentsRes.data) {
+        setAllStudents(studentsRes.data);
+      }
     } catch (err: any) {
       console.error('Failed to load initial data:', err);
     } finally {
@@ -265,6 +305,25 @@ export default function GradesPage() {
     fetchInitialData();
   }, [fetchInitialData]);
 
+  // Load section details when transitioning into enlistStudents or enlistSubjects
+  const loadSectionRosterAndClasses = useCallback(async (sectionId: string) => {
+    try {
+      const [secRes, classRes] = await Promise.all([
+        api.get<SectionItem>(`/api/sections/${sectionId}`),
+        api.get<ClassOfferingOption[]>(`/api/subjects/classes?sectionId=${sectionId}`),
+      ]);
+      if (secRes.success && secRes.data) {
+        setActiveSection(secRes.data);
+        setEnlistedStudents(secRes.data.students || []);
+      }
+      if (classRes.success && classRes.data) {
+        setSectionClasses(classRes.data);
+      }
+    } catch (err) {
+      console.error('Failed to load section roster & classes:', err);
+    }
+  }, []);
+
   // 2. Fetch Grades Matrix for selected class
   const fetchGradesMatrix = useCallback(
     async (classId: string) => {
@@ -274,7 +333,6 @@ export default function GradesPage() {
         const res = await api.get<MatrixResponse>(`/api/grades/classes/${classId}/matrix`);
         if (res.success && res.data) {
           setMatrixData(res.data);
-          // Pre-populate local editable scores dictionary
           const initialScores: Record<string, string> = {};
           res.data.students.forEach((row) => {
             TRIMESTRAL_PERIODS.forEach((term) => {
@@ -296,120 +354,170 @@ export default function GradesPage() {
   );
 
   useEffect(() => {
-    if (selectedClassId && activeTab === 'gradesheet') {
+    if (selectedClassId && viewMode === 'gradesheet') {
       fetchGradesMatrix(selectedClassId);
     }
-  }, [selectedClassId, activeTab, fetchGradesMatrix]);
+  }, [selectedClassId, viewMode, fetchGradesMatrix]);
 
   // ==========================================
-  // ACTION 1: ENLIST STUDENTS (Class List)
+  // NAVIGATION ACTIONS
   // ==========================================
-  const handleOpenEnlistStudents = async (section: SectionItem) => {
-    setActiveSection(section);
-    setSelectedStudentIds([]);
-    try {
-      const res = await api.get<StudentOption[]>('/api/students?limit=200&status=ACTIVE');
-      if (res.success && res.data) {
-        setAvailableStudents(res.data);
-        setIsEnlistStudentsModalOpen(true);
-      }
-    } catch {
-      setErrorMsg('Failed to fetch available students roster');
-    }
+
+  const handleNavigateToEnlistStudents = (sec: SectionItem) => {
+    setActiveSection(sec);
+    setOpenDropdownId(null);
+    setStudentSearchQuery('');
+    loadSectionRosterAndClasses(sec.id);
+    setViewMode('enlistStudents');
   };
 
-  const handleEnlistStudentsSubmit = async () => {
-    if (!activeSection || selectedStudentIds.length === 0) return;
+  const handleNavigateToEnlistSubjects = (sec: SectionItem) => {
+    setActiveSection(sec);
+    setOpenDropdownId(null);
+    loadSectionRosterAndClasses(sec.id);
+    setViewMode('enlistSubjects');
+  };
+
+  const handleNavigateToGradesheet = (sec: SectionItem) => {
+    setOpenDropdownId(null);
+    const matchingClass = classes.find((c) => c.section?.id === sec.id);
+    if (matchingClass) {
+      setSelectedClassId(matchingClass.id);
+    }
+    setViewMode('gradesheet');
+  };
+
+  // ==========================================
+  // QUICK ENLIST STUDENT FROM SEARCH BAR
+  // ==========================================
+
+  // Candidate students not yet enlisted in activeSection
+  const candidateStudents = useMemo(() => {
+    if (!studentSearchQuery.trim()) return [];
+    const q = studentSearchQuery.toLowerCase();
+    const enrolledIds = new Set(enlistedStudents.map((es) => es.studentId || es.student?.id));
+
+    return allStudents
+      .filter((s) => !enrolledIds.has(s.id))
+      .filter(
+        (s) =>
+          s.lastName.toLowerCase().includes(q) ||
+          s.firstName.toLowerCase().includes(q) ||
+          s.studentId.toLowerCase().includes(q),
+      )
+      .slice(0, 6);
+  }, [allStudents, enlistedStudents, studentSearchQuery]);
+
+  const handleQuickEnlistStudent = async (student: StudentOption) => {
+    if (!activeSection) return;
     setSubmitting(true);
     setErrorMsg(null);
     try {
       const res = await api.post(`/api/sections/${activeSection.id}/students`, {
-        studentIds: selectedStudentIds,
+        studentIds: [student.id],
       });
       if (res.success) {
-        setSuccessMsg(
-          `Enlisted ${selectedStudentIds.length} student(s) into Section ${activeSection.name}!`,
-        );
-        setIsEnlistStudentsModalOpen(false);
+        setSuccessMsg(`Enlisted ${student.firstName} ${student.lastName} into Section ${activeSection.name}!`);
+        setStudentSearchQuery('');
+        loadSectionRosterAndClasses(activeSection.id);
         fetchInitialData();
       } else {
-        setErrorMsg(res.message || 'Failed to enlist students');
+        setErrorMsg(res.message || 'Failed to enlist student');
       }
     } catch (err: any) {
-      setErrorMsg(err.message || 'Error enlisting students to section');
+      setErrorMsg(err.message || 'Error enlisting student');
     } finally {
       setSubmitting(false);
     }
   };
 
+  const handleRemoveStudent = async (studentId: string, studentName: string) => {
+    if (!activeSection) return;
+    if (!confirm(`Are you sure you want to drop ${studentName} from Section ${activeSection.name}?`))
+      return;
+    try {
+      const res = await api.delete(`/api/sections/${activeSection.id}/students/${studentId}`);
+      if (res.success) {
+        setSuccessMsg(`Removed ${studentName} from Section.`);
+        loadSectionRosterAndClasses(activeSection.id);
+        fetchInitialData();
+      } else {
+        setErrorMsg(res.message || 'Failed to remove student');
+      }
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Error removing student');
+    }
+  };
+
   // ==========================================
-  // ACTION 2: ENLIST SUBJECT & SCHEDULE (Class List)
+  // DRAG & DROP / REORDER SUBJECTS
   // ==========================================
-  const handleOpenEnlistSubject = (section: SectionItem) => {
-    setActiveSection(section);
-    setEnlistSubjectForm({
+
+  const moveSubjectOrder = (index: number, direction: 'up' | 'down') => {
+    const targetIndex = direction === 'up' ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= sectionClasses.length) return;
+
+    const updated = [...sectionClasses];
+    const [moved] = updated.splice(index, 1);
+    updated.splice(targetIndex, 0, moved);
+    setSectionClasses(updated);
+    setSuccessMsg('Subject schedule order updated!');
+    setTimeout(() => setSuccessMsg(null), 2500);
+  };
+
+  // Open Add Subject Modal
+  const handleOpenAddSubjectModal = () => {
+    if (!activeSection) return;
+    setAddSubjectForm({
       subjectId: subjects[0]?.id || '',
       teacherId: teachers[0]?.id || '',
-      classCode: `${section.name.toUpperCase().slice(0, 4)}-SUBJ`,
-      room: section.room || 'Room 201',
-      capacity: section.capacity || 40,
+      classCode: `${activeSection.name.toUpperCase().slice(0, 4)}-${subjects[0]?.code || 'SUBJ'}`,
+      room: activeSection.room || 'Room 201',
+      capacity: activeSection.capacity || 40,
       days: [DayOfWeek.MONDAY, DayOfWeek.WEDNESDAY, DayOfWeek.FRIDAY],
       startTime: '08:00',
       endTime: '09:30',
     });
-    setIsEnlistSubjectModalOpen(true);
+    setIsAddSubjectModalOpen(true);
   };
 
-  const handleEnlistSubjectSubmit = async () => {
-    if (!activeSection || !enlistSubjectForm.subjectId) {
-      setErrorMsg('Please select a subject to enlist');
+  const handleAddSubjectSubmit = async () => {
+    if (!activeSection || !addSubjectForm.subjectId) {
+      setErrorMsg('Please select a subject');
       return;
     }
     setSubmitting(true);
     setErrorMsg(null);
     try {
       const payload = {
-        subjectId: enlistSubjectForm.subjectId,
+        subjectId: addSubjectForm.subjectId,
         sectionId: activeSection.id,
-        teacherId: enlistSubjectForm.teacherId || undefined,
-        classCode: enlistSubjectForm.classCode || `${activeSection.name}-CLASS`,
-        room: enlistSubjectForm.room,
-        capacity: Number(enlistSubjectForm.capacity),
-        scheduleSlots: enlistSubjectForm.days.map((day) => ({
+        teacherId: addSubjectForm.teacherId || undefined,
+        classCode: addSubjectForm.classCode || `${activeSection.name}-SUBJ`,
+        room: addSubjectForm.room,
+        capacity: Number(addSubjectForm.capacity),
+        scheduleSlots: addSubjectForm.days.map((day) => ({
           dayOfWeek: day,
-          startTime: enlistSubjectForm.startTime,
-          endTime: enlistSubjectForm.endTime,
-          room: enlistSubjectForm.room,
+          startTime: addSubjectForm.startTime,
+          endTime: addSubjectForm.endTime,
+          room: addSubjectForm.room,
         })),
       };
 
       const res = await api.post('/api/subjects/classes', payload);
       if (res.success) {
-        setSuccessMsg(
-          `Subject & schedule successfully enlisted for Section ${activeSection.name}!`,
-        );
-        setIsEnlistSubjectModalOpen(false);
+        setSuccessMsg(`Subject offering enlisted for Section ${activeSection.name}!`);
+        setIsAddSubjectModalOpen(false);
+        loadSectionRosterAndClasses(activeSection.id);
         fetchInitialData();
       } else {
-        setErrorMsg(res.message || 'Failed to enlist subject and schedule');
+        setErrorMsg(res.message || 'Failed to enlist subject');
       }
     } catch (err: any) {
-      setErrorMsg(err.message || 'Error enlisting subject offering');
+      setErrorMsg(err.message || 'Error enlisting subject');
     } finally {
       setSubmitting(false);
     }
-  };
-
-  // ==========================================
-  // ACTION 3: OPEN GRADESHEET FOR SECTION
-  // ==========================================
-  const handleOpenGradesheetForSection = (section: SectionItem) => {
-    // Find matching class offering for this section
-    const matchingClass = classes.find((c) => c.section?.id === section.id);
-    if (matchingClass) {
-      setSelectedClassId(matchingClass.id);
-    }
-    setActiveTab('gradesheet');
   };
 
   // Handle Score Input Change
@@ -488,29 +596,16 @@ export default function GradesPage() {
       const matchesGrade =
         classListGradeFilter === 'ALL' || sec.gradeLevel === classListGradeFilter;
       const matchesSearch =
-        !search.trim() ||
-        sec.name.toLowerCase().includes(search.toLowerCase()) ||
-        sec.gradeLevel.toLowerCase().includes(search.toLowerCase()) ||
+        !classListSearch.trim() ||
+        sec.name.toLowerCase().includes(classListSearch.toLowerCase()) ||
+        sec.gradeLevel.toLowerCase().includes(classListSearch.toLowerCase()) ||
         (sec.adviser &&
           `${sec.adviser.firstName} ${sec.adviser.lastName}`
             .toLowerCase()
-            .includes(search.toLowerCase()));
+            .includes(classListSearch.toLowerCase()));
       return matchesGrade && matchesSearch;
     });
-  }, [sections, classListGradeFilter, search]);
-
-  // Filter learners in Gradesheet view
-  const filteredMatrixStudents = useMemo(() => {
-    if (!matrixData?.students) return [];
-    if (!search.trim()) return matrixData.students;
-    const q = search.toLowerCase();
-    return matrixData.students.filter(
-      (s) =>
-        s.student.lastName.toLowerCase().includes(q) ||
-        s.student.firstName.toLowerCase().includes(q) ||
-        s.student.studentId.toLowerCase().includes(q),
-    );
-  }, [matrixData?.students, search]);
+  }, [sections, classListGradeFilter, classListSearch]);
 
   return (
     <div className="space-y-6">
@@ -545,7 +640,7 @@ export default function GradesPage() {
         </div>
       )}
 
-      {/* Header & Primary Navigation */}
+      {/* Header & Mode Switcher */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm">
         <div className="flex items-center gap-3">
           <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl border border-emerald-100">
@@ -570,9 +665,9 @@ export default function GradesPage() {
         <div className="flex bg-slate-100 p-1.5 rounded-xl border border-slate-200">
           <button
             type="button"
-            onClick={() => setActiveTab('classList')}
+            onClick={() => setViewMode('classList')}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-              activeTab === 'classList'
+              viewMode === 'classList'
                 ? 'bg-white text-slate-900 shadow-sm'
                 : 'text-slate-600 hover:text-slate-900'
             }`}
@@ -583,11 +678,11 @@ export default function GradesPage() {
           <button
             type="button"
             onClick={() => {
-              setActiveTab('gradesheet');
+              setViewMode('gradesheet');
               if (selectedClassId) fetchGradesMatrix(selectedClassId);
             }}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-              activeTab === 'gradesheet'
+              viewMode === 'gradesheet'
                 ? 'bg-white text-slate-900 shadow-sm'
                 : 'text-slate-600 hover:text-slate-900'
             }`}
@@ -599,11 +694,11 @@ export default function GradesPage() {
       </div>
 
       {/* ==========================================
-          TAB 1: CLASS LIST & SECTIONS VIEW
+          VIEW 1: CLASS LIST TABLE WITH ACTIONS DROPDOWN
           ========================================== */}
-      {activeTab === 'classList' && (
+      {viewMode === 'classList' && (
         <div className="space-y-6 animate-fade-in">
-          {/* Quick Stats Banner */}
+          {/* Quick Stats Summary */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm flex items-center gap-4">
               <div className="p-3 bg-blue-50 text-blue-600 rounded-xl">
@@ -663,8 +758,8 @@ export default function GradesPage() {
               <input
                 type="text"
                 placeholder="Search class by section name or adviser..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
+                value={classListSearch}
+                onChange={(e) => setClassListSearch(e.target.value)}
                 className="w-full pl-10 pr-4 py-2 text-xs border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
               />
             </div>
@@ -689,118 +784,491 @@ export default function GradesPage() {
             </div>
           </div>
 
-          {/* Class List & Sections Cards Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredSections.map((sec) => {
-              const capacityPercent = Math.min(
-                100,
-                Math.round(((sec.studentCount || 0) / (sec.capacity || 40)) * 100),
-              );
+          {/* Table Listing of Sections with Actions Dropdown */}
+          <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="border-b border-slate-200 bg-slate-50/80 text-[11px] font-bold text-slate-600 uppercase tracking-wider">
+                    <th className="py-3.5 px-4">#</th>
+                    <th className="py-3.5 px-4">Grade Level</th>
+                    <th className="py-3.5 px-4">Section Name</th>
+                    <th className="py-3.5 px-4">Room Location</th>
+                    <th className="py-3.5 px-4">Class Adviser</th>
+                    <th className="py-3.5 px-4">Student Roster</th>
+                    <th className="py-3.5 px-4">Enlisted Subjects</th>
+                    <th className="py-3.5 px-4 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 text-xs text-slate-800">
+                  {filteredSections.map((sec, idx) => {
+                    const capacityPercent = Math.min(
+                      100,
+                      Math.round(((sec.studentCount || 0) / (sec.capacity || 40)) * 100),
+                    );
+                    const isDropdownOpen = openDropdownId === sec.id;
+                    const assignedClassCount = classes.filter((c) => c.section?.id === sec.id).length;
 
-              return (
-                <div
-                  key={sec.id}
-                  className="bg-white rounded-2xl border border-slate-200/90 shadow-sm hover:shadow-md transition-all p-5 flex flex-col justify-between"
-                >
-                  <div>
-                    {/* Card Header */}
-                    <div className="flex items-start justify-between mb-3">
-                      <div>
-                        <span className="text-[10px] font-extrabold uppercase tracking-wider text-emerald-600 bg-emerald-50 px-2.5 py-0.5 rounded-md border border-emerald-100">
-                          {sec.gradeLevel}
-                        </span>
-                        <h3 className="text-lg font-bold text-slate-900 mt-1">
+                    return (
+                      <tr key={sec.id} className="hover:bg-slate-50/60 transition-colors">
+                        <td className="py-4 px-4 font-mono text-slate-500">{idx + 1}</td>
+                        <td className="py-4 px-4">
+                          <span className="text-[10px] font-extrabold uppercase tracking-wider text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-md border border-emerald-100">
+                            {sec.gradeLevel}
+                          </span>
+                        </td>
+                        <td className="py-4 px-4 font-bold text-slate-900 text-sm">
                           Section {sec.name}
-                        </h3>
-                      </div>
-                      <div className="flex items-center gap-1.5 text-xs text-slate-600 bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-200">
-                        <DoorOpen className="w-3.5 h-3.5 text-slate-500" />
-                        <span>{sec.room || 'Room TBA'}</span>
-                      </div>
-                    </div>
+                        </td>
+                        <td className="py-4 px-4 text-slate-600 font-medium">
+                          {sec.room || 'Room TBA'}
+                        </td>
+                        <td className="py-4 px-4">
+                          <div className="font-semibold text-slate-900">
+                            {sec.adviser
+                              ? `${sec.adviser.firstName} ${sec.adviser.lastName}`
+                              : 'No Adviser Assigned'}
+                          </div>
+                          {sec.adviser && (
+                            <div className="text-[10px] text-slate-500 font-mono">
+                              {sec.adviser.employeeId}
+                            </div>
+                          )}
+                        </td>
+                        <td className="py-4 px-4">
+                          <div className="w-36 space-y-1">
+                            <div className="flex items-center justify-between text-[11px]">
+                              <span className="font-bold text-slate-800">
+                                {sec.studentCount || 0} / {sec.capacity || 40}
+                              </span>
+                              <span className="text-slate-500 font-mono">
+                                {capacityPercent}%
+                              </span>
+                            </div>
+                            <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                              <div
+                                className={`h-full rounded-full transition-all ${
+                                  capacityPercent >= 90
+                                    ? 'bg-rose-500'
+                                    : capacityPercent >= 75
+                                      ? 'bg-amber-500'
+                                      : 'bg-emerald-500'
+                                }`}
+                                style={{ width: `${capacityPercent}%` }}
+                              />
+                            </div>
+                          </div>
+                        </td>
+                        <td className="py-4 px-4">
+                          <span className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-blue-50 text-blue-700 border border-blue-100">
+                            {assignedClassCount} Subjects
+                          </span>
+                        </td>
+                        <td className="py-4 px-4 text-right relative">
+                          {/* Actions Dropdown Button */}
+                          <div className="inline-block text-left">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setOpenDropdownId(isDropdownOpen ? null : sec.id)
+                              }
+                              className="flex items-center gap-1 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-colors cursor-pointer border border-slate-200"
+                              aria-label={`Actions for Section ${sec.name}`}
+                            >
+                              <span>Actions</span>
+                              <ChevronDown className="w-3.5 h-3.5" />
+                            </button>
 
-                    {/* Adviser info */}
-                    <div className="flex items-center gap-2 mb-4 text-xs text-slate-700 bg-slate-50/80 p-2.5 rounded-xl border border-slate-100">
-                      <div className="w-6 h-6 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold text-[10px]">
-                        {sec.adviser
-                          ? `${sec.adviser.firstName.charAt(0)}${sec.adviser.lastName.charAt(0)}`
-                          : 'NA'}
-                      </div>
-                      <div className="truncate">
-                        <span className="text-slate-500 block text-[10px]">Class Adviser:</span>
-                        <span className="font-semibold text-slate-900">
-                          {sec.adviser
-                            ? `${sec.adviser.firstName} ${sec.adviser.lastName}`
-                            : 'No Adviser Assigned'}
-                        </span>
-                      </div>
-                    </div>
+                            {/* Dropdown Menu Popup */}
+                            {isDropdownOpen && (
+                              <div className="absolute right-4 mt-1.5 w-52 bg-white rounded-xl shadow-xl border border-slate-200 py-1.5 z-30 animate-scale-in text-left">
+                                <button
+                                  type="button"
+                                  onClick={() => handleNavigateToEnlistStudents(sec)}
+                                  className="w-full flex items-center gap-2.5 px-3.5 py-2 text-xs font-semibold text-slate-700 hover:bg-emerald-50 hover:text-emerald-700 transition-colors cursor-pointer"
+                                >
+                                  <UserPlus className="w-4 h-4 text-emerald-600" />
+                                  <span>Enlist Students</span>
+                                </button>
 
-                    {/* Enrolled Capacity Bar */}
-                    <div className="space-y-1.5 mb-5">
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="text-slate-500 font-medium">Class Roster:</span>
-                        <span className="font-bold text-slate-800">
-                          {sec.studentCount || 0} / {sec.capacity || 40} Learners
-                        </span>
-                      </div>
-                      <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
-                        <div
-                          className={`h-full rounded-full transition-all ${
-                            capacityPercent >= 90
-                              ? 'bg-rose-500'
-                              : capacityPercent >= 75
-                                ? 'bg-amber-500'
-                                : 'bg-emerald-500'
-                          }`}
-                          style={{ width: `${capacityPercent}%` }}
-                        />
-                      </div>
-                    </div>
-                  </div>
+                                <button
+                                  type="button"
+                                  onClick={() => handleNavigateToEnlistSubjects(sec)}
+                                  className="w-full flex items-center gap-2.5 px-3.5 py-2 text-xs font-semibold text-slate-700 hover:bg-blue-50 hover:text-blue-700 transition-colors cursor-pointer"
+                                >
+                                  <BookOpen className="w-4 h-4 text-blue-600" />
+                                  <span>Enlist / Manage Subjects</span>
+                                </button>
 
-                  {/* Class List Action Buttons: Enlist Students, Enlist Subject & Schedule, Open Gradesheet */}
-                  <div className="pt-4 border-t border-slate-100 space-y-2">
-                    <div className="grid grid-cols-2 gap-2">
-                      <button
-                        type="button"
-                        onClick={() => handleOpenEnlistStudents(sec)}
-                        className="flex items-center justify-center gap-1.5 py-2 px-3 bg-emerald-50 text-emerald-700 hover:bg-emerald-100/80 rounded-xl text-xs font-bold transition-colors cursor-pointer border border-emerald-200/60"
-                      >
-                        <UserPlus className="w-3.5 h-3.5" />
-                        <span>Enlist Students</span>
-                      </button>
+                                <div className="border-t border-slate-100 my-1" />
 
-                      <button
-                        type="button"
-                        onClick={() => handleOpenEnlistSubject(sec)}
-                        className="flex items-center justify-center gap-1.5 py-2 px-3 bg-blue-50 text-blue-700 hover:bg-blue-100/80 rounded-xl text-xs font-bold transition-colors cursor-pointer border border-blue-200/60"
-                      >
-                        <BookOpen className="w-3.5 h-3.5" />
-                        <span>Enlist Subject</span>
-                      </button>
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={() => handleOpenGradesheetForSection(sec)}
-                      className="w-full flex items-center justify-center gap-1.5 py-2 px-3 bg-slate-900 text-white hover:bg-slate-800 rounded-xl text-xs font-bold transition-colors cursor-pointer shadow-sm"
-                    >
-                      <GraduationCap className="w-3.5 h-3.5 text-emerald-400" />
-                      <span>Trimestral Gradesheet</span>
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
+                                <button
+                                  type="button"
+                                  onClick={() => handleNavigateToGradesheet(sec)}
+                                  className="w-full flex items-center gap-2.5 px-3.5 py-2 text-xs font-semibold text-slate-700 hover:bg-purple-50 hover:text-purple-700 transition-colors cursor-pointer"
+                                >
+                                  <GraduationCap className="w-4 h-4 text-purple-600" />
+                                  <span>Trimestral Gradesheet</span>
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       )}
 
       {/* ==========================================
-          TAB 2: TRIMESTRAL GRADESHEET VIEW
+          VIEW 2: DEDICATED ENLIST STUDENTS VIEW
+          Top Search Bar + Bottom Enlisted Students Div
           ========================================== */}
-      {activeTab === 'gradesheet' && (
+      {viewMode === 'enlistStudents' && activeSection && (
+        <div className="space-y-6 animate-fade-in">
+          {/* Section Breadcrumb Header */}
+          <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => setViewMode('classList')}
+                className="p-2 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
+                title="Back to Class List"
+              >
+                <ArrowLeft className="w-5 h-5" />
+              </button>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-extrabold uppercase text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-100">
+                    {activeSection.gradeLevel}
+                  </span>
+                  <span className="text-xs text-slate-500 font-medium">
+                    {activeSection.room || 'Room TBA'}
+                  </span>
+                </div>
+                <h2 className="text-xl font-bold text-slate-900 mt-0.5">
+                  Enlist Students — Section {activeSection.name}
+                </h2>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-4 text-xs bg-slate-50 px-4 py-2 rounded-xl border border-slate-200">
+              <div>
+                <span className="text-slate-500 block text-[10px]">Class Adviser:</span>
+                <span className="font-bold text-slate-900">
+                  {activeSection.adviser
+                    ? `${activeSection.adviser.firstName} ${activeSection.adviser.lastName}`
+                    : 'No Adviser'}
+                </span>
+              </div>
+              <div className="h-6 w-px bg-slate-200" />
+              <div>
+                <span className="text-slate-500 block text-[10px]">Current Roster:</span>
+                <span className="font-bold text-emerald-700">
+                  {enlistedStudents.length} / {activeSection.capacity || 40} Learners
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* TOP SEARCH-TO-ENLIST BAR */}
+          <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm space-y-3">
+            <div className="flex items-center gap-2">
+              <UserPlus className="w-5 h-5 text-emerald-600" />
+              <h3 className="text-sm font-bold text-slate-900">
+                Search & Instant Enlist
+              </h3>
+            </div>
+            <p className="text-xs text-slate-500">
+              Search by learner name or LRN to instantly enlist into Section {activeSection.name}
+            </p>
+
+            <div className="relative">
+              <Search className="w-4 h-4 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                placeholder="Type student name or LRN to enlist..."
+                value={studentSearchQuery}
+                onChange={(e) => setStudentSearchQuery(e.target.value)}
+                className="w-full pl-11 pr-4 py-2.5 text-xs border border-slate-300 rounded-xl bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 font-medium"
+              />
+            </div>
+
+            {/* Candidate Search Results */}
+            {studentSearchQuery.trim() !== '' && (
+              <div className="border border-slate-200 rounded-xl bg-slate-50/50 p-2 space-y-1.5 max-h-64 overflow-y-auto">
+                {candidateStudents.length > 0 ? (
+                  candidateStudents.map((st) => (
+                    <div
+                      key={st.id}
+                      className="flex items-center justify-between p-2.5 bg-white rounded-lg border border-slate-200/70 shadow-xs hover:border-emerald-300 transition-colors"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold text-xs">
+                          {st.firstName.charAt(0)}
+                          {st.lastName.charAt(0)}
+                        </div>
+                        <div>
+                          <div className="font-bold text-xs text-slate-900">
+                            {st.lastName}, {st.firstName}
+                          </div>
+                          <div className="text-[10px] font-mono text-slate-500">
+                            LRN: {st.studentId} • {st.gender || 'MALE'}
+                          </div>
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => handleQuickEnlistStudent(st)}
+                        disabled={submitting}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition-colors cursor-pointer disabled:opacity-50"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>Enlist (+)</span>
+                      </button>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-center py-4 text-xs text-slate-500">
+                    No matching unassigned students found.
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* BOTTOM DIV: ENLISTED STUDENTS ROSTER */}
+          <div
+            id="enlisted-students-roster-div"
+            className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-6 space-y-4"
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Users className="w-5 h-5 text-emerald-600" />
+                <h3 className="text-sm font-bold text-slate-900">
+                  Enlisted Students on Current Section ({enlistedStudents.length})
+                </h3>
+              </div>
+              <span className="text-xs font-semibold text-slate-500">
+                Section {activeSection.name} • {activeSection.gradeLevel}
+              </span>
+            </div>
+
+            {enlistedStudents.length > 0 ? (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="border-b border-slate-200 bg-slate-50 text-[11px] font-bold text-slate-600 uppercase">
+                      <th className="py-3 px-4">#</th>
+                      <th className="py-3 px-4">Student Name</th>
+                      <th className="py-3 px-4">LRN</th>
+                      <th className="py-3 px-4">Gender</th>
+                      <th className="py-3 px-4">Status</th>
+                      <th className="py-3 px-4 text-right">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 text-xs">
+                    {enlistedStudents.map((es, idx) => (
+                      <tr key={es.id} className="hover:bg-slate-50/50">
+                        <td className="py-3 px-4 font-mono text-slate-500">{idx + 1}</td>
+                        <td className="py-3 px-4">
+                          <div className="font-bold text-slate-900">
+                            {es.student.lastName}, {es.student.firstName}{' '}
+                            {es.student.middleName ? `${es.student.middleName.charAt(0)}.` : ''}
+                          </div>
+                        </td>
+                        <td className="py-3 px-4 font-mono text-slate-600">
+                          {es.student.studentId}
+                        </td>
+                        <td className="py-3 px-4 text-slate-600">
+                          {es.student.gender || 'MALE'}
+                        </td>
+                        <td className="py-3 px-4">
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
+                            {es.status || 'ACTIVE'}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 text-right">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              handleRemoveStudent(
+                                es.student.id,
+                                `${es.student.firstName} ${es.student.lastName}`,
+                              )
+                            }
+                            className="text-xs text-rose-600 hover:text-rose-800 font-semibold p-1 cursor-pointer flex items-center gap-1 ml-auto"
+                            title="Drop from section"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            <span>Remove</span>
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="text-center py-8 border border-dashed border-slate-200 rounded-xl">
+                <Users className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                <p className="text-xs font-bold text-slate-700">No students enlisted yet</p>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Use the search bar above to find and enlist learners into Section {activeSection.name}.
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ==========================================
+          VIEW 3: DEDICATED ENLIST / MANAGE SUBJECTS VIEW
+          Drag-and-Drop / Reordering Timetable List
+          ========================================== */}
+      {viewMode === 'enlistSubjects' && activeSection && (
+        <div className="space-y-6 animate-fade-in">
+          {/* Section Breadcrumb Header */}
+          <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => setViewMode('classList')}
+                className="p-2 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
+                title="Back to Class List"
+              >
+                <ArrowLeft className="w-5 h-5" />
+              </button>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-extrabold uppercase text-blue-600 bg-blue-50 px-2 py-0.5 rounded-md border border-blue-100">
+                    {activeSection.gradeLevel}
+                  </span>
+                  <span className="text-xs text-slate-500 font-medium">
+                    {activeSection.room || 'Room TBA'}
+                  </span>
+                </div>
+                <h2 className="text-xl font-bold text-slate-900 mt-0.5">
+                  Enlist & Customize Subjects — Section {activeSection.name}
+                </h2>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleOpenAddSubjectModal}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer shadow-sm"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Add Subject Offering</span>
+            </button>
+          </div>
+
+          {/* Draggable Subjects List Container */}
+          <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-6 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div>
+                <h3 className="text-sm font-bold text-slate-900">
+                  Enlisted Subject Courses & Timetable Sequence
+                </h3>
+                <p className="text-xs text-slate-500">
+                  Customize the period schedule order using the move buttons or drag handles
+                </p>
+              </div>
+              <span className="text-xs font-bold text-blue-700 bg-blue-50 px-3 py-1 rounded-lg border border-blue-100">
+                {sectionClasses.length} Subject Offerings
+              </span>
+            </div>
+
+            {sectionClasses.length > 0 ? (
+              <div className="space-y-3">
+                {sectionClasses.map((sc, idx) => (
+                  <div
+                    key={sc.id}
+                    className="flex items-center justify-between p-4 bg-slate-50/70 hover:bg-white border border-slate-200 rounded-xl transition-all shadow-xs"
+                  >
+                    <div className="flex items-center gap-3">
+                      {/* Drag / Period Handle */}
+                      <div className="flex items-center gap-1 text-slate-400">
+                        <GripVertical className="w-5 h-5 cursor-grab" />
+                        <span className="font-mono text-xs font-bold text-slate-700 bg-slate-200 px-2 py-0.5 rounded">
+                          Period {idx + 1}
+                        </span>
+                      </div>
+
+                      {/* Course details */}
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-sm text-slate-900">
+                            {sc.subject.name}
+                          </span>
+                          <span className="text-xs font-mono bg-blue-50 text-blue-700 px-2 py-0.5 rounded font-semibold">
+                            {sc.classCode}
+                          </span>
+                        </div>
+                        <div className="text-xs text-slate-500 mt-0.5 flex items-center gap-3">
+                          <span>
+                            Teacher:{' '}
+                            <strong className="text-slate-800">
+                              {sc.teacher
+                                ? `${sc.teacher.firstName} ${sc.teacher.lastName}`
+                                : 'TBA'}
+                            </strong>
+                          </span>
+                          <span>•</span>
+                          <span>{sc.room || 'Room 201'}</span>
+                          <span>•</span>
+                          <span>{sc.enrolledCount || 0} Enrolled</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Order Controls & Actions */}
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => moveSubjectOrder(idx, 'up')}
+                        disabled={idx === 0}
+                        className="p-1.5 text-slate-500 hover:text-slate-900 disabled:opacity-30 rounded-lg hover:bg-slate-200 transition-colors cursor-pointer"
+                        title="Move Up"
+                      >
+                        <ChevronUp className="w-4 h-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => moveSubjectOrder(idx, 'down')}
+                        disabled={idx === sectionClasses.length - 1}
+                        className="p-1.5 text-slate-500 hover:text-slate-900 disabled:opacity-30 rounded-lg hover:bg-slate-200 transition-colors cursor-pointer"
+                        title="Move Down"
+                      >
+                        <ChevronDown className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-10 border border-dashed border-slate-200 rounded-xl">
+                <BookOpen className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                <p className="text-xs font-bold text-slate-700">No subjects enlisted yet</p>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Click &ldquo;Add Subject Offering&rdquo; to assign curriculum subjects and timetables for Section {activeSection.name}.
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ==========================================
+          VIEW 4: TRIMESTRAL GRADESHEET VIEW
+          ========================================== */}
+      {viewMode === 'gradesheet' && (
         <div className="space-y-6 animate-fade-in">
           {/* Action Toolbar */}
           <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col md:flex-row md:items-center md:justify-between gap-4">
@@ -866,17 +1334,10 @@ export default function GradesPage() {
           {/* Trimestral Gradesheet Table */}
           <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
             <div className="p-4 border-b border-slate-100 flex items-center justify-between gap-4">
-              <div className="relative flex-1 max-w-xs">
-                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                <input
-                  type="text"
-                  placeholder="Filter student in class..."
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  className="w-full pl-9 pr-3 py-1.5 text-xs border border-slate-200 rounded-lg bg-slate-50 focus:bg-white focus:outline-none"
-                />
+              <div className="text-xs font-semibold text-slate-700">
+                Class Matrix: {matrixData?.subjectClass.subject.name || 'Subject'}{' '}
+                ({matrixData?.subjectClass.classCode})
               </div>
-
               <div className="text-xs font-medium text-slate-500">
                 Total Enrolled:{' '}
                 <strong className="text-slate-900">{matrixData?.totalEnrolled || 0}</strong>
@@ -898,12 +1359,11 @@ export default function GradesPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-xs text-slate-800">
-                  {filteredMatrixStudents.map((row, idx) => {
+                  {matrixData?.students?.map((row, idx) => {
                     const score1 = getScoreForTerm(row, TRIMESTRAL_PERIODS[0]);
                     const score2 = getScoreForTerm(row, TRIMESTRAL_PERIODS[1]);
                     const score3 = getScoreForTerm(row, TRIMESTRAL_PERIODS[2]);
 
-                    // Compute dynamic trimestral average
                     const availableScores = [score1, score2, score3].filter(
                       (s): s is number => s !== undefined,
                     );
@@ -921,13 +1381,13 @@ export default function GradesPage() {
 
                     return (
                       <tr key={row.enrollmentId} className="hover:bg-slate-50/50 transition-colors">
-                        <td className="py-3.5 px-4 font-mono text-slate-600">{idx + 1}</td>
+                        <td className="py-3.5 px-4 font-mono text-slate-500">{idx + 1}</td>
                         <td className="py-3.5 px-4">
                           <div className="font-bold text-slate-900">
                             {row.student.lastName}, {row.student.firstName}{' '}
                             {row.student.middleName ? `${row.student.middleName.charAt(0)}.` : ''}
                           </div>
-                          <div className="text-[10px] font-mono text-slate-600">
+                          <div className="text-[10px] font-mono text-slate-500">
                             LRN: {row.student.studentId}
                           </div>
                         </td>
@@ -1012,7 +1472,7 @@ export default function GradesPage() {
                           <span
                             className={`font-black text-xs px-2.5 py-1 rounded-md ${
                               dynamicAvg === null
-                                ? 'text-slate-600 bg-slate-100'
+                                ? 'text-slate-500 bg-slate-100'
                                 : passed
                                   ? 'text-emerald-700 bg-emerald-50'
                                   : 'text-rose-700 bg-rose-50'
@@ -1035,7 +1495,7 @@ export default function GradesPage() {
                               {passed ? 'Passed' : 'Failed'}
                             </span>
                           ) : (
-                            <span className="text-slate-600 text-[10px]">Incomplete</span>
+                            <span className="text-slate-400 text-[10px]">Incomplete</span>
                           )}
                         </td>
 
@@ -1045,7 +1505,6 @@ export default function GradesPage() {
                             type="button"
                             onClick={() => openReportCard(row.student.id)}
                             className="text-xs text-emerald-600 hover:text-emerald-800 font-bold p-1 cursor-pointer"
-                            title="View Trimestral Report Card"
                           >
                             Report Card
                           </button>
@@ -1061,105 +1520,22 @@ export default function GradesPage() {
       )}
 
       {/* ==========================================
-          MODAL 1: ENLIST STUDENTS INTO SECTION
+          MODAL: ADD SUBJECT OFFERING (For Section)
           ========================================== */}
-      {isEnlistStudentsModalOpen && activeSection && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
-          <div className="bg-white rounded-2xl max-w-xl w-full p-6 shadow-2xl border border-slate-200 animate-scale-in max-h-[90vh] flex flex-col">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-              <div>
-                <h3 className="text-base font-bold text-slate-900">
-                  Enlist Learners — Section {activeSection.name}
-                </h3>
-                <p className="text-xs text-slate-500">
-                  Select active learners to add to this section roster ({activeSection.gradeLevel})
-                </p>
-              </div>
-              <button
-                onClick={() => setIsEnlistStudentsModalOpen(false)}
-                className="text-slate-400 hover:text-slate-600 cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="py-4 flex-1 overflow-y-auto space-y-2">
-              <div className="text-xs font-semibold text-slate-700 flex items-center justify-between px-1">
-                <span>Available Learners ({availableStudents.length})</span>
-                <span className="text-emerald-600 font-bold">
-                  {selectedStudentIds.length} Selected
-                </span>
-              </div>
-
-              <div className="space-y-1 max-h-60 overflow-y-auto border border-slate-200 rounded-xl p-2 bg-slate-50/50">
-                {availableStudents.map((st) => (
-                  <label
-                    key={st.id}
-                    className="flex items-center gap-3 p-2 hover:bg-white rounded-lg cursor-pointer transition-colors"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={selectedStudentIds.includes(st.id)}
-                      onChange={(e) => {
-                        if (e.target.checked) {
-                          setSelectedStudentIds([...selectedStudentIds, st.id]);
-                        } else {
-                          setSelectedStudentIds(selectedStudentIds.filter((id) => id !== st.id));
-                        }
-                      }}
-                      className="w-4 h-4 text-emerald-600 rounded border-slate-300 focus:ring-emerald-500"
-                    />
-                    <div>
-                      <div className="text-xs font-bold text-slate-800">
-                        {st.lastName}, {st.firstName}
-                      </div>
-                      <div className="text-[10px] font-mono text-slate-600">
-                        LRN: {st.studentId}
-                      </div>
-                    </div>
-                  </label>
-                ))}
-              </div>
-            </div>
-
-            <div className="pt-4 border-t border-slate-100 flex items-center justify-end gap-3">
-              <button
-                type="button"
-                onClick={() => setIsEnlistStudentsModalOpen(false)}
-                className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl cursor-pointer"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleEnlistStudentsSubmit}
-                disabled={submitting || selectedStudentIds.length === 0}
-                className="px-4 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-colors cursor-pointer disabled:opacity-50"
-              >
-                Enlist Selected ({selectedStudentIds.length})
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ==========================================
-          MODAL 2: ENLIST SUBJECT & SCHEDULE
-          ========================================== */}
-      {isEnlistSubjectModalOpen && activeSection && (
+      {isAddSubjectModalOpen && activeSection && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
           <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 animate-scale-in">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
               <div>
                 <h3 className="text-base font-bold text-slate-900">
-                  Enlist Subject & Schedule — Section {activeSection.name}
+                  Enlist Subject Offering — Section {activeSection.name}
                 </h3>
                 <p className="text-xs text-slate-500">
-                  Configure subject course offering with assigned teacher and timetable
+                  Select subject, faculty, and timetable schedule
                 </p>
               </div>
               <button
-                onClick={() => setIsEnlistSubjectModalOpen(false)}
+                onClick={() => setIsAddSubjectModalOpen(false)}
                 className="text-slate-400 hover:text-slate-600 cursor-pointer"
               >
                 <X className="w-5 h-5" />
@@ -1172,9 +1548,9 @@ export default function GradesPage() {
                   Subject Course
                 </label>
                 <select
-                  value={enlistSubjectForm.subjectId}
+                  value={addSubjectForm.subjectId}
                   onChange={(e) =>
-                    setEnlistSubjectForm({ ...enlistSubjectForm, subjectId: e.target.value })
+                    setAddSubjectForm({ ...addSubjectForm, subjectId: e.target.value })
                   }
                   className="w-full text-xs px-3 py-2 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white"
                 >
@@ -1191,9 +1567,9 @@ export default function GradesPage() {
                   Assigned Faculty / Teacher
                 </label>
                 <select
-                  value={enlistSubjectForm.teacherId}
+                  value={addSubjectForm.teacherId}
                   onChange={(e) =>
-                    setEnlistSubjectForm({ ...enlistSubjectForm, teacherId: e.target.value })
+                    setAddSubjectForm({ ...addSubjectForm, teacherId: e.target.value })
                   }
                   className="w-full text-xs px-3 py-2 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white"
                 >
@@ -1212,9 +1588,9 @@ export default function GradesPage() {
                   </label>
                   <input
                     type="text"
-                    value={enlistSubjectForm.room}
+                    value={addSubjectForm.room}
                     onChange={(e) =>
-                      setEnlistSubjectForm({ ...enlistSubjectForm, room: e.target.value })
+                      setAddSubjectForm({ ...addSubjectForm, room: e.target.value })
                     }
                     className="w-full text-xs px-3 py-2 border border-slate-200 rounded-xl bg-slate-50"
                   />
@@ -1225,9 +1601,9 @@ export default function GradesPage() {
                   </label>
                   <input
                     type="text"
-                    value={enlistSubjectForm.classCode}
+                    value={addSubjectForm.classCode}
                     onChange={(e) =>
-                      setEnlistSubjectForm({ ...enlistSubjectForm, classCode: e.target.value })
+                      setAddSubjectForm({ ...addSubjectForm, classCode: e.target.value })
                     }
                     className="w-full text-xs px-3 py-2 border border-slate-200 rounded-xl bg-slate-50 font-mono"
                   />
@@ -1241,9 +1617,9 @@ export default function GradesPage() {
                   </label>
                   <input
                     type="time"
-                    value={enlistSubjectForm.startTime}
+                    value={addSubjectForm.startTime}
                     onChange={(e) =>
-                      setEnlistSubjectForm({ ...enlistSubjectForm, startTime: e.target.value })
+                      setAddSubjectForm({ ...addSubjectForm, startTime: e.target.value })
                     }
                     className="w-full text-xs px-3 py-2 border border-slate-200 rounded-xl bg-slate-50"
                   />
@@ -1254,9 +1630,9 @@ export default function GradesPage() {
                   </label>
                   <input
                     type="time"
-                    value={enlistSubjectForm.endTime}
+                    value={addSubjectForm.endTime}
                     onChange={(e) =>
-                      setEnlistSubjectForm({ ...enlistSubjectForm, endTime: e.target.value })
+                      setAddSubjectForm({ ...addSubjectForm, endTime: e.target.value })
                     }
                     className="w-full text-xs px-3 py-2 border border-slate-200 rounded-xl bg-slate-50"
                   />
@@ -1267,18 +1643,18 @@ export default function GradesPage() {
             <div className="pt-4 border-t border-slate-100 flex items-center justify-end gap-3">
               <button
                 type="button"
-                onClick={() => setIsEnlistSubjectModalOpen(false)}
+                onClick={() => setIsAddSubjectModalOpen(false)}
                 className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl cursor-pointer"
               >
                 Cancel
               </button>
               <button
                 type="button"
-                onClick={handleEnlistSubjectSubmit}
+                onClick={handleAddSubjectSubmit}
                 disabled={submitting}
                 className="px-4 py-2 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition-colors cursor-pointer"
               >
-                Enlist Subject & Schedule
+                Enlist Subject
               </button>
             </div>
           </div>
@@ -1286,7 +1662,7 @@ export default function GradesPage() {
       )}
 
       {/* ==========================================
-          MODAL 3: TRIMESTRAL REPORT CARD MODAL
+          MODAL: REPORT CARD (SF9)
           ========================================== */}
       {isReportCardModalOpen && reportCardData && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
@@ -1330,7 +1706,7 @@ export default function GradesPage() {
                       <tr key={idx} className="hover:bg-slate-50">
                         <td className="py-2.5 px-3">
                           <div className="font-bold text-slate-900">{s.subjectName}</div>
-                          <div className="text-[10px] text-slate-600">{s.subjectCode}</div>
+                          <div className="text-[10px] text-slate-500">{s.subjectCode}</div>
                         </td>
                         <td className="py-2.5 px-2 text-center font-medium">
                           {t1 !== undefined ? t1.toFixed(1) : '—'}
@@ -1379,7 +1755,7 @@ export default function GradesPage() {
             </div>
 
             <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
-              <span className="text-xs text-slate-600">
+              <span className="text-xs text-slate-500">
                 DepEd Trimestral Grading System • Pass mark: 75.0
               </span>
               <button

@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import GradesPage from '../page';
@@ -14,7 +14,7 @@ vi.mock('@/lib/api', () => ({
   },
 }));
 
-describe('GradesPage', () => {
+describe('GradesPage - Class List, Enlistment & Trimestral Gradesheet', () => {
   beforeEach(() => {
     vi.clearAllMocks();
 
@@ -32,6 +32,40 @@ describe('GradesPage', () => {
               section: { id: 'sec-1', name: 'Diamond', gradeLevel: 'Grade 7' },
             },
           ],
+        } as any);
+      }
+      if (url.includes('/api/sections/sec-1')) {
+        return Promise.resolve({
+          success: true,
+          data: {
+            id: 'sec-1',
+            name: 'Diamond',
+            gradeLevel: 'Grade 7',
+            room: 'Room 204',
+            capacity: 40,
+            adviser: {
+              id: 't-1',
+              firstName: 'Roberto',
+              lastName: 'Cruz',
+              employeeId: 'EMP-002',
+            },
+            students: [
+              {
+                id: 'sec-stud-1',
+                studentId: 'stud-1',
+                status: 'ACTIVE',
+                student: {
+                  id: 'stud-1',
+                  studentId: '2026-0001',
+                  firstName: 'Juan',
+                  lastName: 'Dela Cruz',
+                  middleName: 'Reyes',
+                  gender: 'MALE',
+                  status: 'ACTIVE',
+                },
+              },
+            ],
+          },
         } as any);
       }
       if (url.includes('/api/sections')) {
@@ -120,43 +154,81 @@ describe('GradesPage', () => {
     });
   });
 
-  it('renders page header and Class List by default with action buttons', async () => {
+  it('renders Class List table with sections and actions dropdown', async () => {
+    const user = userEvent.setup();
     render(<GradesPage />);
 
     expect(screen.getByText(/Class List & Trimestral Gradesheet/i)).toBeInTheDocument();
     expect(screen.getByText(/Trimestral Academic Calendar/i)).toBeInTheDocument();
 
-    // Section cards in Class List
+    // Verify sections table
     await waitFor(() => {
       expect(screen.getByText(/Section Diamond/i)).toBeInTheDocument();
     });
 
-    expect(screen.getByText(/35 \/ 40 Learners/i)).toBeInTheDocument();
+    expect(screen.getByText(/Room 204/i)).toBeInTheDocument();
     expect(screen.getByText(/Roberto Cruz/i)).toBeInTheDocument();
 
-    // Action buttons
+    // Verify actions dropdown button exists
+    const actionsBtn = screen.getByRole('button', { name: /Actions for Section Diamond/i });
+    expect(actionsBtn).toBeInTheDocument();
+
+    // Click dropdown to open menu
+    await user.click(actionsBtn);
     expect(screen.getByRole('button', { name: /Enlist Students/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Enlist Subject/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Enlist \/ Manage Subjects/i })).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: /Trimestral Gradesheet/i }).length).toBeGreaterThanOrEqual(2);
   });
 
-  it('opens Enlist Students modal and enables selection', async () => {
+  it('transitions to dedicated Enlist Students view with top search bar and bottom roster div', async () => {
     const user = userEvent.setup();
+    vi.mocked(api.post).mockResolvedValueOnce({
+      success: true,
+      message: 'Student enlisted successfully',
+    } as any);
+
     render(<GradesPage />);
 
     await waitFor(() => {
       expect(screen.getByText(/Section Diamond/i)).toBeInTheDocument();
     });
 
-    const enlistBtn = screen.getByRole('button', { name: /Enlist Students/i });
-    await user.click(enlistBtn);
+    // Open Actions dropdown and select "Enlist Students"
+    const actionsBtn = screen.getByRole('button', { name: /Actions for Section Diamond/i });
+    await user.click(actionsBtn);
 
-    expect(screen.getByText(/Enlist Learners — Section Diamond/i)).toBeInTheDocument();
+    const enlistStudentsBtn = screen.getByRole('button', { name: /Enlist Students/i });
+    await user.click(enlistStudentsBtn);
+
+    // Verify transition to Enlist Students view
+    expect(screen.getByText(/Enlist Students — Section Diamond/i)).toBeInTheDocument();
+
+    // Top Search Bar
+    const searchInput = screen.getByPlaceholderText(/Type student name or LRN to enlist/i);
+    expect(searchInput).toBeInTheDocument();
+
+    // Bottom Div for enlisted students roster
     await waitFor(() => {
+      expect(screen.getByText(/Enlisted Students on Current Section/i)).toBeInTheDocument();
       expect(screen.getByText(/Dela Cruz, Juan/i)).toBeInTheDocument();
     });
+
+    // Search for unassigned student (e.g., Ana Santos)
+    await user.type(searchInput, 'Ana');
+    await waitFor(() => {
+      expect(screen.getByText(/Santos, Ana/i)).toBeInTheDocument();
+    });
+
+    // Click Enlist (+)
+    const enlistPlusBtn = screen.getByRole('button', { name: /Enlist \(\+\)/i });
+    await user.click(enlistPlusBtn);
+
+    expect(api.post).toHaveBeenCalledWith('/api/sections/sec-1/students', {
+      studentIds: ['stud-2'],
+    });
   });
 
-  it('opens Enlist Subject & Schedule modal with subject and teacher options', async () => {
+  it('transitions to Enlist / Manage Subjects view with period ordering and Add Subject Offering modal', async () => {
     const user = userEvent.setup();
     render(<GradesPage />);
 
@@ -164,10 +236,23 @@ describe('GradesPage', () => {
       expect(screen.getByText(/Section Diamond/i)).toBeInTheDocument();
     });
 
-    const enlistSubjBtn = screen.getByRole('button', { name: /Enlist Subject/i });
-    await user.click(enlistSubjBtn);
+    const actionsBtn = screen.getByRole('button', { name: /Actions for Section Diamond/i });
+    await user.click(actionsBtn);
 
-    expect(screen.getByText(/Enlist Subject & Schedule — Section Diamond/i)).toBeInTheDocument();
+    const manageSubjectsBtn = screen.getByRole('button', { name: /Enlist \/ Manage Subjects/i });
+    await user.click(manageSubjectsBtn);
+
+    // Verify transition to Enlist & Customize Subjects view
+    expect(screen.getByText(/Enlist & Customize Subjects — Section Diamond/i)).toBeInTheDocument();
+    expect(screen.getByText(/Enlisted Subject Courses & Timetable Sequence/i)).toBeInTheDocument();
+    expect(screen.getByText(/Period 1/i)).toBeInTheDocument();
+    expect(screen.getByText(/MATH7-SEC-A/i)).toBeInTheDocument();
+
+    // Add Subject Offering modal
+    const addSubjectBtn = screen.getByRole('button', { name: /Add Subject Offering/i });
+    await user.click(addSubjectBtn);
+
+    expect(screen.getByText(/Enlist Subject Offering — Section Diamond/i)).toBeInTheDocument();
     expect(screen.getByText('Subject Course')).toBeInTheDocument();
     expect(screen.getByText('Assigned Faculty / Teacher')).toBeInTheDocument();
   });
