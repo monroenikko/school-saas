@@ -22,6 +22,7 @@ import {
   Sparkles,
   Building2,
   Bell,
+  FileText,
 } from 'lucide-react';
 
 interface NavItem {
@@ -53,6 +54,7 @@ const NAV_GROUPS: NavGroup[] = [
       { title: 'Sections', href: '/dashboard/sections', icon: FolderTree },
       { title: 'Subjects & Schedules', href: '/dashboard/subjects', icon: BookOpen },
       { title: 'Grades & Report Cards', href: '/dashboard/grades', icon: GraduationCap },
+      { title: 'Reports & SF Forms', href: '/dashboard/reports', icon: FileText },
     ],
   },
   {
