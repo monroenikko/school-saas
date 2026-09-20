@@ -379,7 +379,7 @@ rfid-agent/
 
 ### Phase 3 — Operations
 - [ ] Enrollment workflow
-- [ ] Finance & payments
+- [x] Finance & payments (Parent Billing & Fee Engine)
 - [ ] Library management
 - [ ] Reports & document generation
 
