@@ -13,6 +13,8 @@ import { TenantsModule } from './tenants/tenants.module';
 import { RfidModule } from './rfid/rfid.module';
 import { AttendanceModule } from './attendance/attendance.module';
 import { TransactionsModule } from './transactions/transactions.module';
+import { UsersModule } from './users/users.module';
+import { SettingsModule } from './settings/settings.module';
 
 @Module({
   imports: [
@@ -28,6 +30,8 @@ import { TransactionsModule } from './transactions/transactions.module';
     RfidModule,
     AttendanceModule,
     TransactionsModule,
+    UsersModule,
+    SettingsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
