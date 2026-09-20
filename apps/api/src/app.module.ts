@@ -19,6 +19,7 @@ import { SettingsModule } from './settings/settings.module';
 import { BullModule } from '@nestjs/bullmq';
 import { NotificationsModule } from './notifications/notifications.module';
 import { ReportsModule } from './reports/reports.module';
+import { IdCardsModule } from './id-cards/id-cards.module';
 
 @Module({
   imports: [
@@ -44,6 +45,7 @@ import { ReportsModule } from './reports/reports.module';
     SettingsModule,
     NotificationsModule,
     ReportsModule,
+    IdCardsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
