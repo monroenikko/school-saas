@@ -199,8 +199,10 @@ async create() { ... }
 | API paths | kebab-case, plural nouns | `/api/students`, `/api/rfid-devices` |
 | DB columns | snake_case (Prisma maps) | `first_name`, `tenant_id` |
 
-## Testing
+## Testing Best Practices
 
-- Unit tests for services (mock Prisma)
-- E2E tests for controllers (test full HTTP flow)
-- Test file naming: `*.spec.ts` for unit, `*.e2e-spec.ts` for e2e
+- Always write unit tests for services using mocked `PrismaService` (never hit the database).
+- Verify `tenantId` is included in all query filters.
+- Unit test controllers to verify response envelope and status codes.
+- Test custom business exceptions and guard behaviors.
+- For complete testing patterns and code templates, see [`school-saas-testing`](file:///Users/aldrich/Desktop/workspace/next/saas/.agents/skills/school-saas-testing/SKILL.md).

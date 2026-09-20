@@ -223,3 +223,12 @@ type FormData = z.infer<typeof schema>;
 | Layouts | `layout.tsx` in route folder | `(dashboard)/layout.tsx` |
 | CSS classes | Tailwind utilities | `className="flex items-center gap-2"` |
 | API types | PascalCase | `Student`, `CreateStudentInput` |
+
+## Unit Testing Best Practices
+
+- Use **Vitest** + **React Testing Library** + `@testing-library/jest-dom`.
+- Query by accessible ARIA roles (`screen.getByRole`) rather than CSS classes or IDs.
+- Simulate real user interactions using `@testing-library/user-event`.
+- Mock external dependencies (`next/navigation`, `useAuth`, `api`) in isolation.
+- Test loading skeletons, empty states, and error alerts.
+- For complete frontend unit testing patterns, see [`school-saas-testing`](file:///Users/aldrich/Desktop/workspace/next/saas/.agents/skills/school-saas-testing/SKILL.md).
