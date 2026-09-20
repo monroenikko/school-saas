@@ -10,6 +10,8 @@ import { SectionsModule } from './sections/sections.module';
 import { SubjectsModule } from './subjects/subjects.module';
 import { GradesModule } from './grades/grades.module';
 import { TenantsModule } from './tenants/tenants.module';
+import { RfidModule } from './rfid/rfid.module';
+import { AttendanceModule } from './attendance/attendance.module';
 
 @Module({
   imports: [
@@ -22,6 +24,8 @@ import { TenantsModule } from './tenants/tenants.module';
     SubjectsModule,
     GradesModule,
     TenantsModule,
+    RfidModule,
+    AttendanceModule,
   ],
   controllers: [AppController],
   providers: [AppService],

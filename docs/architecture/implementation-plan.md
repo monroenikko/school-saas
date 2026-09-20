@@ -359,19 +359,19 @@ rfid-agent/
 
 ### Phase 1 — Foundation & Core (Current)
 - [x] Architecture & planning
-- [ ] Docker setup (PostgreSQL, Redis)
-- [ ] Turborepo monorepo scaffold
-- [ ] NestJS backend with auth + multi-tenancy
-- [ ] Prisma schema + migrations
-- [ ] Students, Teachers, Sections, Subjects CRUD
-- [ ] RFID device registration + scan event API
-- [ ] Attendance recording + dashboard
-- [ ] Next.js frontend with TailwindCSS
-- [ ] Login/Register pages
-- [ ] Dashboard with data tables & forms
+- [x] Docker setup (PostgreSQL, Redis)
+- [x] Turborepo monorepo scaffold
+- [x] NestJS backend with auth + multi-tenancy
+- [x] Prisma schema + migrations
+- [x] Students, Teachers, Sections, Subjects CRUD
+- [x] RFID device registration + scan event API
+- [x] Attendance recording + dashboard
+- [x] Next.js frontend with TailwindCSS
+- [x] Login/Register pages
+- [x] Dashboard with data tables & forms
 
 ### Phase 2 — Communication & Grades
-- [ ] Grades module
+- [x] Grades module
 - [ ] Schedule management
 - [ ] Announcements & notifications
 - [ ] Parent accounts
