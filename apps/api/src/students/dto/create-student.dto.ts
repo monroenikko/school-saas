@@ -7,6 +7,7 @@ import {
   IsEmail,
   IsDateString,
   MaxLength,
+  ValidateIf,
 } from 'class-validator';
 import { Gender, StudentStatus } from '@school-saas/shared';
 
@@ -48,6 +49,7 @@ export class CreateStudentDto {
     example: '2012-05-14',
   })
   @IsOptional()
+  @ValidateIf((o) => !!o.birthDate)
   @IsDateString()
   birthDate?: string;
 
@@ -73,6 +75,7 @@ export class CreateStudentDto {
 
   @ApiPropertyOptional({ description: 'Guardian primary email', example: 'parent.delacruz@gmail.com' })
   @IsOptional()
+  @ValidateIf((o) => !!o.guardianEmail)
   @IsEmail()
   guardianEmail?: string;
 

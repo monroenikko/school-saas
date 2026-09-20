@@ -228,10 +228,25 @@ export default function StudentsPage() {
     setFormError('');
 
     try {
+      const payload: any = {
+        ...formData,
+        studentId: formData.studentId.trim(),
+        firstName: formData.firstName.trim(),
+        lastName: formData.lastName.trim(),
+        middleName: formData.middleName.trim() || undefined,
+        birthDate: formData.birthDate || undefined,
+        sectionId: formData.sectionId || undefined,
+        rfidCardUid: formData.rfidCardUid.trim() || undefined,
+        guardianName: formData.guardianName.trim() || undefined,
+        guardianEmail: formData.guardianEmail.trim() || undefined,
+        guardianPhone: formData.guardianPhone.trim() || undefined,
+        emergencyContact: formData.emergencyContact.trim() || undefined,
+      };
+
       if (isEditModalOpen && selectedStudent) {
-        await api.patch(`/api/students/${selectedStudent.id}`, formData);
+        await api.patch(`/api/students/${selectedStudent.id}`, payload);
       } else {
-        await api.post('/api/students', formData);
+        await api.post('/api/students', payload);
       }
       setIsEnrollModalOpen(false);
       setIsEditModalOpen(false);
@@ -737,11 +752,15 @@ export default function StudentsPage() {
                       className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 outline-none"
                     >
                       <option value="">-- Select Section --</option>
-                      {sections.map((s) => (
-                        <option key={s.id} value={s.id}>
-                          {s.name} (Grade {s.gradeLevel})
-                        </option>
-                      ))}
+                      {sections.map((s) => {
+                        const glStr = String(s.gradeLevel || '');
+                        const gradeText = glStr.startsWith('Grade') ? glStr : `Grade ${glStr}`;
+                        return (
+                          <option key={s.id} value={s.id}>
+                            {s.name.includes('Grade') ? s.name : `${s.name} (${gradeText})`}
+                          </option>
+                        );
+                      })}
                     </select>
                   </div>
 
@@ -778,6 +797,7 @@ export default function StudentsPage() {
                     <label className="block text-xs font-semibold text-slate-700 mb-1">Guardian Full Name</label>
                     <input
                       type="text"
+                      placeholder="e.g. Maria Santos"
                       value={formData.guardianName}
                       onChange={(e) => setFormData({ ...formData, guardianName: e.target.value })}
                       className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 outline-none"
@@ -791,6 +811,26 @@ export default function StudentsPage() {
                       value={formData.guardianPhone}
                       onChange={(e) => setFormData({ ...formData, guardianPhone: e.target.value })}
                       className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-mono focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Guardian Email (Notifications)</label>
+                    <input
+                      type="email"
+                      placeholder="parent@example.com"
+                      value={formData.guardianEmail}
+                      onChange={(e) => setFormData({ ...formData, guardianEmail: e.target.value })}
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Emergency Contact Info</label>
+                    <input
+                      type="text"
+                      placeholder="Alternative contact / relation"
+                      value={formData.emergencyContact}
+                      onChange={(e) => setFormData({ ...formData, emergencyContact: e.target.value })}
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 outline-none"
                     />
                   </div>
                 </div>
