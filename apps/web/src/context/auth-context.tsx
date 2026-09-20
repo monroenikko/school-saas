@@ -4,6 +4,12 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { AuthUser, LoginResponse } from '@school-saas/shared';
 import { api } from '@/lib/api';
+import { useAppDispatch } from '@/lib/redux';
+import {
+  setCredentials as setReduxCredentials,
+  clearCredentials as clearReduxCredentials,
+  setLoading as setReduxLoading,
+} from '@/lib/redux/slices/auth-slice';
 
 interface AuthContextType {
   user: AuthUser | null;
@@ -20,20 +26,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const router = useRouter();
+  const dispatch = useAppDispatch();
 
   const refreshProfile = async () => {
     try {
       const res = await api.get<AuthUser & { permissions: string[] }>('/api/auth/me');
       if (res.success && res.data) {
         setUser(res.data);
+        dispatch(setReduxCredentials({ user: res.data }));
       } else {
         setUser(null);
+        dispatch(clearReduxCredentials());
       }
     } catch {
       setUser(null);
+      dispatch(clearReduxCredentials());
       api.setToken(null);
     } finally {
       setIsLoading(false);
+      dispatch(setReduxLoading(false));
     }
   };
 
@@ -43,6 +54,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       refreshProfile();
     } else {
       setIsLoading(false);
+      dispatch(setReduxLoading(false));
     }
   }, []);
 
@@ -56,6 +68,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (res.success && res.data) {
       api.setToken(res.data.tokens.accessToken);
       setUser(res.data.user);
+      dispatch(
+        setReduxCredentials({
+          user: res.data.user,
+          token: res.data.tokens.accessToken,
+        }),
+      );
       router.push('/dashboard');
     }
   };
@@ -66,6 +84,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (res.success && res.data) {
       api.setToken(res.data.tokens.accessToken);
       setUser(res.data.user);
+      dispatch(
+        setReduxCredentials({
+          user: res.data.user,
+          token: res.data.tokens.accessToken,
+        }),
+      );
       router.push('/dashboard');
     }
   };
@@ -78,6 +102,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } finally {
       api.setToken(null);
       setUser(null);
+      dispatch(clearReduxCredentials());
       router.push('/login');
     }
   };

@@ -1,10 +1,12 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/auth-context';
 import { DashboardSidebar } from '@/components/dashboard/sidebar';
 import { DashboardHeader } from '@/components/dashboard/header';
+import { useAppDispatch, useAppSelector } from '@/lib/redux';
+import { setSidebarCollapsed, setMobileSidebarOpen } from '@/lib/redux/slices/ui-slice';
 
 export default function DashboardLayout({
   children,
@@ -13,8 +15,26 @@ export default function DashboardLayout({
 }) {
   const { user, isLoading } = useAuth();
   const router = useRouter();
-  const [isCollapsed, setIsCollapsed] = useState(false);
-  const [mobileOpen, setMobileOpen] = useState(false);
+  const dispatch = useAppDispatch();
+
+  const isCollapsed = useAppSelector((state) => state.ui.sidebarCollapsed);
+  const mobileOpen = useAppSelector((state) => state.ui.mobileSidebarOpen);
+
+  const setIsCollapsed = (val: boolean | ((prev: boolean) => boolean)) => {
+    if (typeof val === 'function') {
+      dispatch(setSidebarCollapsed(val(isCollapsed)));
+    } else {
+      dispatch(setSidebarCollapsed(val));
+    }
+  };
+
+  const setMobileOpen = (val: boolean | ((prev: boolean) => boolean)) => {
+    if (typeof val === 'function') {
+      dispatch(setMobileSidebarOpen(val(mobileOpen)));
+    } else {
+      dispatch(setMobileSidebarOpen(val));
+    }
+  };
 
   useEffect(() => {
     if (!isLoading && !user) {
