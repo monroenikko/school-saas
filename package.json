@@ -14,9 +14,24 @@
     "test": "turbo test",
     "docker:up": "docker compose up -d",
     "docker:down": "docker compose down",
-    "docker:reset": "docker compose down -v && docker compose up -d"
+    "docker:reset": "docker compose down -v && docker compose up -d",
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate dev",
+    "db:seed": "prisma db seed",
+    "db:studio": "prisma studio"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
   },
   "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "bcryptjs": "^3.0.3",
+    "prisma": "^6.19.3",
+    "ts-node": "^10.9.2",
+    "tsx": "^4.23.13",
     "turbo": "^2.4.4"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.19.3"
   }
 }
