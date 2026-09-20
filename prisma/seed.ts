@@ -752,6 +752,161 @@ async function main() {
   });
   console.log(`✅ RFID Device & Attendance seeded`);
 
+  // 15. Seed Multi-Tenant Campuses: Oakwood Academy & Greenwood High
+  const oakwood = await prisma.tenant.upsert({
+    where: { slug: 'oakwood-academy' },
+    update: {},
+    create: {
+      name: 'Oakwood Academy',
+      slug: 'oakwood-academy',
+      domain: 'oakwood.schoolsaas.com',
+      plan: 'STANDARD',
+      status: TenantStatus.ACTIVE,
+      address: '789 Heritage Road, Taguig, Metro Manila',
+      phone: '+63 2 8333 4444',
+      email: 'admissions@oakwood.edu.ph',
+      currency: 'PHP',
+      timezone: 'Asia/Manila',
+    },
+  });
+
+  const greenwood = await prisma.tenant.upsert({
+    where: { slug: 'greenwood-high' },
+    update: {},
+    create: {
+      name: 'Greenwood High',
+      slug: 'greenwood-high',
+      domain: 'greenwood.schoolsaas.com',
+      plan: 'PREMIUM',
+      status: TenantStatus.ACTIVE,
+      address: '500 Forest Hill Drive, Pasig, Metro Manila',
+      phone: '+63 2 8555 6666',
+      email: 'admissions@greenwood.edu.ph',
+      currency: 'PHP',
+      timezone: 'Asia/Manila',
+    },
+  });
+
+  // Seed academic years and faculty for Greenwood
+  const gwAY = await prisma.academicYear.upsert({
+    where: { tenantId_name: { tenantId: greenwood.id, name: '2026-2027' } },
+    update: {},
+    create: {
+      tenantId: greenwood.id,
+      name: '2026-2027',
+      startDate: new Date('2026-08-01'),
+      endDate: new Date('2027-05-31'),
+      isCurrent: true,
+    },
+  });
+
+  const gwT1 = await prisma.teacher.upsert({
+    where: { tenantId_employeeId: { tenantId: greenwood.id, employeeId: 'GW-TCH-001' } },
+    update: {},
+    create: {
+      tenantId: greenwood.id,
+      employeeId: 'GW-TCH-001',
+      firstName: 'Eleanor',
+      lastName: 'Vance',
+      email: 'evance@greenwood.edu.ph',
+      specialization: 'Mathematics',
+    },
+  });
+
+  const gwT2 = await prisma.teacher.upsert({
+    where: { tenantId_employeeId: { tenantId: greenwood.id, employeeId: 'GW-TCH-002' } },
+    update: {},
+    create: {
+      tenantId: greenwood.id,
+      employeeId: 'GW-TCH-002',
+      firstName: 'Arthur',
+      lastName: 'Pendelton',
+      email: 'apendelton@greenwood.edu.ph',
+      specialization: 'Science',
+    },
+  });
+
+  const gwSections = [
+    { name: 'Pine', gradeLevel: 'Grade 7', room: 'Room 101', capacity: 40, adviserId: gwT1.id },
+    { name: 'Cedar', gradeLevel: 'Grade 7', room: 'Room 102', capacity: 40, adviserId: gwT2.id },
+    { name: 'Maple', gradeLevel: 'Grade 8', room: 'Room 201', capacity: 40 },
+    { name: 'Willow', gradeLevel: 'Grade 8', room: 'Room 202', capacity: 40 },
+    { name: 'Birch', gradeLevel: 'Grade 9', room: 'Room 301', capacity: 40 },
+    { name: 'Redwood', gradeLevel: 'Grade 10', room: 'Room 401', capacity: 40 },
+    { name: 'STEM-A', gradeLevel: 'Grade 11', track: 'Academic', strand: 'STEM', room: 'SHS-101', capacity: 40 },
+    { name: 'ABM-A', gradeLevel: 'Grade 11', track: 'Academic', strand: 'ABM', room: 'SHS-102', capacity: 40 },
+    { name: 'STEM-A', gradeLevel: 'Grade 12', track: 'Academic', strand: 'STEM', room: 'SHS-201', capacity: 40 },
+    { name: 'HUMSS-A', gradeLevel: 'Grade 12', track: 'Academic', strand: 'HUMSS', room: 'SHS-202', capacity: 40 },
+  ];
+
+  for (const s of gwSections) {
+    await prisma.section.upsert({
+      where: {
+        tenantId_academicYearId_name_gradeLevel: {
+          tenantId: greenwood.id,
+          academicYearId: gwAY.id,
+          name: s.name,
+          gradeLevel: s.gradeLevel,
+        },
+      },
+      update: {},
+      create: { tenantId: greenwood.id, academicYearId: gwAY.id, ...s },
+    });
+  }
+  console.log(`✅ Greenwood High seeded with 10 sections and faculty`);
+
+  // Seed academic years and faculty for Oakwood
+  const oakAY = await prisma.academicYear.upsert({
+    where: { tenantId_name: { tenantId: oakwood.id, name: '2026-2027' } },
+    update: {},
+    create: {
+      tenantId: oakwood.id,
+      name: '2026-2027',
+      startDate: new Date('2026-08-01'),
+      endDate: new Date('2027-05-31'),
+      isCurrent: true,
+    },
+  });
+
+  const oakT1 = await prisma.teacher.upsert({
+    where: { tenantId_employeeId: { tenantId: oakwood.id, employeeId: 'OAK-TCH-001' } },
+    update: {},
+    create: {
+      tenantId: oakwood.id,
+      employeeId: 'OAK-TCH-001',
+      firstName: 'Samuel',
+      lastName: 'Oak',
+      email: 'soak@oakwood.edu.ph',
+      specialization: 'Physical Sciences',
+    },
+  });
+
+  const oakSections = [
+    { name: 'Acacia', gradeLevel: 'Grade 7', room: 'Room A-101', capacity: 40, adviserId: oakT1.id },
+    { name: 'Narra', gradeLevel: 'Grade 7', room: 'Room A-102', capacity: 40 },
+    { name: 'Molave', gradeLevel: 'Grade 8', room: 'Room B-201', capacity: 40 },
+    { name: 'Kamagong', gradeLevel: 'Grade 9', room: 'Room C-301', capacity: 40 },
+    { name: 'Mahogany', gradeLevel: 'Grade 10', room: 'Room D-401', capacity: 40 },
+    { name: 'STEM-1', gradeLevel: 'Grade 11', track: 'Academic', strand: 'STEM', room: 'Room E-101', capacity: 40 },
+    { name: 'STEM-1', gradeLevel: 'Grade 12', track: 'Academic', strand: 'STEM', room: 'Room E-201', capacity: 40 },
+  ];
+
+  for (const s of oakSections) {
+    await prisma.section.upsert({
+      where: {
+        tenantId_academicYearId_name_gradeLevel: {
+          tenantId: oakwood.id,
+          academicYearId: oakAY.id,
+          name: s.name,
+          gradeLevel: s.gradeLevel,
+        },
+      },
+      update: {},
+      create: { tenantId: oakwood.id, academicYearId: oakAY.id, ...s },
+    });
+  }
+  console.log(`✅ Oakwood Academy seeded with 7 sections and faculty`);
+
   console.log('🎉 Database seed completed successfully!');
 }
 

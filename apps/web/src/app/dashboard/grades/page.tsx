@@ -237,6 +237,16 @@ export const TRIMESTRAL_PERIODS = [
   { id: GradingPeriod.FINALS, label: '3rd Term', shortName: '3rd Term', altKeys: ['FINALS', 'Q3', 'Q4'] },
 ];
 
+// Standard K-12 section suggestions & presets per grade level
+export const STANDARD_SECTION_PRESETS: Record<string, string[]> = {
+  'Grade 7': ['Diamond', 'Ruby', 'Emerald', 'Sapphire', 'Pearl', 'Jade', 'Topaz', 'Pine', 'Cedar', 'Acacia', 'Narra', 'Rizal', 'Bonifacio'],
+  'Grade 8': ['Camia', 'Sampaguita', 'Rosal', 'Jasmine', 'Dahlia', 'Ilang-Ilang', 'Maple', 'Willow', 'Molave', 'Mabini', 'Luna'],
+  'Grade 9': ['Molave', 'Narra', 'Yakal', 'Ipil', 'Kamagong', 'Mahogany', 'Birch', 'Cypress', 'Del Pilar', 'Silang'],
+  'Grade 10': ['Courage', 'Honesty', 'Integrity', 'Loyalty', 'Wisdom', 'Excellence', 'Redwood', 'Sequoia', 'Aguinaldo', 'Quezon'],
+  'Grade 11': ['STEM-A', 'STEM-B', 'ABM-A', 'ABM-B', 'HUMSS-A', 'HUMSS-B', 'GAS-A', 'TVL-ICT', 'TVL-HE'],
+  'Grade 12': ['STEM-A', 'STEM-B', 'ABM-A', 'ABM-B', 'HUMSS-A', 'HUMSS-B', 'GAS-A', 'TVL-ICT', 'TVL-HE'],
+};
+
 export default function GradesPage() {
   // Navigation / View Modes:
   // 'classList' -> Table listing of all sections with actions dropdown
@@ -2351,15 +2361,41 @@ export default function GradesPage() {
                     <option value="">
                       -- Select Section {tenantModalSections.length > 0 ? `(${tenantModalSections.length} available)` : ''} --
                     </option>
-                    {tenantModalSections.map((sec) => (
-                      <option key={sec.id} value={sec.name}>
-                        Section {sec.name} ({sec.gradeLevel}){sec.room ? ` • ${sec.room}` : ''}
-                      </option>
-                    ))}
+
+                    {tenantModalSections.length > 0 && (
+                      <optgroup label={`🏫 Created Sections (${tenantModalSections.length})`}>
+                        {tenantModalSections.map((sec) => (
+                          <option key={sec.id} value={sec.name}>
+                            Section {sec.name} ({sec.gradeLevel}){sec.room ? ` • ${sec.room}` : ''}
+                          </option>
+                        ))}
+                      </optgroup>
+                    )}
+
+                    <optgroup label={`✨ Standard ${createSectionForm.gradeLevel} Presets`}>
+                      {(
+                        STANDARD_SECTION_PRESETS[createSectionForm.gradeLevel] ||
+                        STANDARD_SECTION_PRESETS['Grade 7']
+                      )
+                        .filter(
+                          (preset) =>
+                            !tenantModalSections.some(
+                              (s) =>
+                                s.name.toLowerCase() === preset.toLowerCase() &&
+                                s.gradeLevel === createSectionForm.gradeLevel,
+                            ),
+                        )
+                        .map((preset) => (
+                          <option key={preset} value={preset}>
+                            Section {preset} ({createSectionForm.gradeLevel})
+                          </option>
+                        ))}
+                    </optgroup>
+
                     <option value="__CUSTOM__">➕ Enter New / Custom Section...</option>
                   </select>
 
-                  {(isCustomSection || tenantModalSections.length === 0) && (
+                  {isCustomSection && (
                     <div className="mt-2 animate-fade-in">
                       <input
                         type="text"
