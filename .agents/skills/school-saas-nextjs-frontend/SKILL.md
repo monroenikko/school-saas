@@ -42,27 +42,26 @@ app/
 ```
 components/
 ├── ui/                         # Generic, reusable UI primitives
+│   ├── test/                   # STRICT: Dedicated test folder
+│   │   ├── button.spec.tsx
+│   │   └── modal.spec.tsx
 │   ├── button.tsx
 │   ├── input.tsx
 │   ├── select.tsx
 │   ├── modal.tsx
-│   ├── data-table.tsx
-│   ├── badge.tsx
-│   ├── card.tsx
-│   ├── toast.tsx
-│   ├── dropdown-menu.tsx
-│   ├── avatar.tsx
-│   ├── skeleton.tsx
-│   └── pagination.tsx
-├── layout/
-│   ├── sidebar.tsx
+│   └── data-table.tsx
+├── dashboard/                  # Dashboard layout components
+│   ├── test/                   # STRICT: Dedicated test folder
+│   │   ├── header.spec.tsx
+│   │   └── sidebar.spec.tsx
 │   ├── header.tsx
-│   ├── breadcrumbs.tsx
-│   └── mobile-nav.tsx
+│   ├── sidebar.tsx
+│   └── breadcrumbs.tsx
 └── forms/
+    ├── test/                   # STRICT: Dedicated test folder
+    │   └── student-form.spec.tsx
     ├── student-form.tsx
-    ├── teacher-form.tsx
-    └── section-form.tsx
+    └── teacher-form.tsx
 ```
 
 ### Component Rules
@@ -226,6 +225,7 @@ type FormData = z.infer<typeof schema>;
 
 ## Unit Testing Best Practices
 
+- **Dedicated `test/` Folder**: Every component folder or route group MUST have its own dedicated `test/` subfolder (e.g. `src/components/dashboard/test/`, `src/components/ui/test/`). NEVER place `.spec.tsx` or `.test.tsx` files directly in the module source folder.
 - Use **Vitest** + **React Testing Library** + `@testing-library/jest-dom`.
 - Query by accessible ARIA roles (`screen.getByRole`) rather than CSS classes or IDs.
 - Simulate real user interactions using `@testing-library/user-event`.

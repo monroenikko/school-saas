@@ -46,6 +46,60 @@ npm run test:watch --workspace=web
 
 ---
 
+## 📁 Test Directory Structure: Dedicated `test/` Folder in Every Module
+
+> [!IMPORTANT]
+> **STRICT ARCHITECTURAL RULE: NEVER MIX TEST FILES WITH MODULE SOURCE CODE.**
+> Every module (backend feature module, frontend feature/component module) MUST have its own dedicated `test/` subfolder.
+> All unit test files (`*.spec.ts`, `*.test.ts`, `*.spec.tsx`) must reside strictly inside the `test/` folder of that module. Do not place `.spec` or `.test` files directly alongside `.controller.ts`, `.service.ts`, `.module.ts`, or `.tsx` files.
+
+### 1. Backend (NestJS) Module Layout:
+```
+apps/api/src/students/
+├── dto/
+│   ├── create-student.dto.ts
+│   └── update-student.dto.ts
+├── test/
+│   ├── students.controller.spec.ts
+│   ├── students.service.spec.ts
+│   └── create-student.dto.spec.ts
+├── students.controller.ts
+├── students.module.ts
+└── students.service.ts
+```
+
+Root-level application tests reside in:
+```
+apps/api/src/test/
+└── app.controller.spec.ts
+```
+
+Shared test fixtures and global mocks reside in:
+```
+apps/api/test/
+├── jest-e2e.json
+└── mocks/
+    ├── prisma.mock.ts
+    └── redis.mock.ts
+```
+
+### 2. Frontend (Next.js) Component & Feature Layout:
+```
+apps/web/src/components/dashboard/
+├── test/
+│   ├── header.spec.tsx
+│   └── sidebar.spec.tsx
+├── header.tsx
+└── sidebar.tsx
+
+apps/web/src/app/dashboard/students/
+├── test/
+│   └── page.spec.tsx
+└── page.tsx
+```
+
+---
+
 ## ⚙️ Backend (NestJS) Unit Testing Best Practices
 
 ### 1. Mocking `PrismaService`
@@ -340,6 +394,7 @@ it('loads and displays student data', async () => {
 ## 📋 Unit Testing Checklist
 
 Before submitting code in any phase:
+- [ ] Directory Organization: Every module has a dedicated `test/` folder; no test files are placed directly in the module source folder.
 - [ ] Backend: Service business logic has 100% path coverage for tenant isolation.
 - [ ] Backend: Controllers have unit tests verifying status codes & envelope shapes.
 - [ ] Backend: Critical DTOs have validation tests checking required fields and regex patterns.

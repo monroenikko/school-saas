@@ -251,6 +251,22 @@ DELETE /api/users/:id              # Deactivate user
 
 ---
 
+## Testing Architecture & Conventions
+
+### Strict Test File Isolation
+Every feature module (backend) and component/feature group (frontend) MUST have its own dedicated `test/` directory. Test files must **NEVER** be mixed directly alongside implementation code:
+
+- **Backend (`apps/api/src/<module>/test/`)**:
+  - `apps/api/src/<module>/test/<module>.service.spec.ts` (business logic, 100% tenant isolation with mock Prisma)
+  - `apps/api/src/<module>/test/<module>.controller.spec.ts` (envelope format, status codes)
+  - `apps/api/src/test/app.controller.spec.ts` (root-level tests)
+- **Frontend (`apps/web/src/components/<group>/test/` or `apps/web/src/app/<route>/test/`)**:
+  - `apps/web/src/components/dashboard/test/header.spec.tsx` (Vitest + React Testing Library)
+  - `apps/web/src/components/ui/test/button.spec.tsx`
+- **Monorepo Execution**: Run all tests via `npm run test` (Turborepo pipeline).
+
+---
+
 ## RFID Architecture
 
 ```

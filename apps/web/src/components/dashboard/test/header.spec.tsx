@@ -1,7 +1,7 @@
 import React from 'react';
 import { render, screen } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
-import { DashboardHeader } from './header';
+import { DashboardHeader } from '../header';
 
 vi.mock('next/navigation', () => ({
   usePathname: () => '/dashboard/overview',

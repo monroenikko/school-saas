@@ -22,7 +22,9 @@ src/<module>/
 │   └── update-<entity>.dto.ts
 ├── entities/
 │   └── <entity>.entity.ts     # Response/entity shape (if needed beyond Prisma)
-└── <module>.controller.spec.ts # Unit tests
+└── test/                      # STRICT: Dedicated test folder for module
+    ├── <module>.controller.spec.ts
+    └── <module>.service.spec.ts
 ```
 
 ## Multi-Tenancy Enforcement
@@ -201,6 +203,8 @@ async create() { ... }
 
 ## Testing Best Practices
 
+- **Dedicated `test/` Folder**: Every module MUST have its own `test/` subfolder (e.g. `src/<module>/test/`). NEVER mix `.spec.ts` files directly in the module source root.
+- **Root Tests**: App-level tests belong in `src/test/` (e.g. `src/test/app.controller.spec.ts`).
 - Always write unit tests for services using mocked `PrismaService` (never hit the database).
 - Verify `tenantId` is included in all query filters.
 - Unit test controllers to verify response envelope and status codes.
