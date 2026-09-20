@@ -31,28 +31,91 @@
 
 ---
 
-## RBAC Permissions Model
+## RBAC Permissions Model & Administrative Architecture
 
-### Roles
-| Role | Scope | Description |
-|------|-------|-------------|
-| `SUPER_ADMIN` | Platform | Platform owner, manages all tenants |
-| `SCHOOL_ADMIN` | Tenant | School administrator, full school access |
-| `REGISTRAR` | Tenant | Manages enrollment, records |
-| `TEACHER` | Tenant | Views assigned sections, manages grades |
-| `PARENT` | Tenant | Views child's data (Phase 2) |
-| `STUDENT` | Tenant | Views own data (Phase 2) |
+### Administrative Roles & Scoping
 
-### Permission Strings
 ```
-students.view, students.create, students.update, students.delete
-teachers.view, teachers.create, teachers.update, teachers.delete
-sections.view, sections.create, sections.update, sections.delete
-subjects.view, subjects.create, subjects.update, subjects.delete
-attendance.view, attendance.manage, attendance.export
-rfid.devices.view, rfid.devices.manage
-users.view, users.create, users.update, users.delete
-settings.view, settings.manage
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                           SUPER_ADMIN (Platform)                           │
+│  • Full control of the entire SaaS platform across all schools             │
+│  • Tenant provisioning, subscription plans, platform billing & health       │
+│  • Cross-tenant global analytics & optional tenant impersonation            │
+└──────────────────────────────────────┬──────────────────────────────────────┘
+                                       │
+            ┌──────────────────────────┴──────────────────────────┐
+            ▼                                                     ▼
+┌───────────────────────────────┐     ┌───────────────────────────────┐
+│   SCHOOL_ADMIN (School A)     │     │   SCHOOL_ADMIN (School B)     │
+│ • Full control of School A    │     │ • Full control of School B    │
+│ • ALL modules for tenant A    │     │ • ALL modules for tenant B    │
+│ • Full Transaction & Billing  │     │ • Full Transaction & Billing  │
+│ • Strict isolation from B     │     │ • Strict isolation from A     │
+└───────────────┬───────────────┘     └───────────────┬───────────────┘
+                │                                     │
+    ┌───────────┴───────────┐             ┌───────────┴───────────┐
+    ▼                       ▼             ▼                       ▼
+ TEACHER                 REGISTRAR     TEACHER                 REGISTRAR
+(Assigned sections)     (Admissions)  (Assigned sections)     (Admissions)
+```
+
+### Roles Breakdown
+
+| Role | Scope | Authority & Module Permissions |
+|------|-------|--------------------------------|
+| **`SUPER_ADMIN`** | Platform Root (`tenant_id = null`) | **Controls the whole SaaS platform.**<br>• Full access across all tenants with `*` permissions.<br>• Manages schools/tenants (create, update, suspend, plan tiers).<br>• Platform analytics, global audit logs, system-level settings.<br>• Bypasses tenant guards; can specify `x-tenant-id` for school inspection. |
+| **`SCHOOL_ADMIN`** | Tenant Scoped (`tenant_id = school_id`) | **Every school/tenant has its own dedicated admin.**<br>• **Full authority over ALL modules for their tenant**.<br>• **Transaction & Billing Control**: Full access to parent billing, tuition records, RFID card fees, payment receipts (GCash/Cash), and invoice statuses.<br>• Full CRUD on Students, Teachers, Sections, Subjects, Schedules, RFID Gate Turnstiles, Grades, Staff, and School Settings.<br>• **Strictly isolated**: zero access to any other school's data. |
+| **`REGISTRAR`** | Tenant Scoped | Manages student admissions, enrollments, section assignments, and academic records. |
+| **`TEACHER`** | Tenant Scoped | Views assigned sections/students, records attendance, inputs grades, views teaching schedules. |
+| **`STAFF`** | Tenant Scoped | Front-desk operations, manual attendance logging, basic parent transaction collection. |
+| **`PARENT`** (Phase 2) | Tenant Scoped | Mobile/Web portal: views own child's attendance taps, report cards, and billing balances. |
+| **`STUDENT`** (Phase 2) | Tenant Scoped | Portal: views own schedule, grades, and attendance history. |
+
+### Module Permissions Mapping
+
+```typescript
+// Defined in packages/shared/src/constants/permissions.ts
+export const DEFAULT_ROLE_PERMISSIONS: Record<Role, string[]> = {
+  [Role.SUPER_ADMIN]: ['*'], // Controls entire SaaS platform
+  [Role.SCHOOL_ADMIN]: [
+    // Full access to ALL modules for the tenant:
+    'students:read', 'students:create', 'students:update', 'students:delete',
+    'teachers:read', 'teachers:create', 'teachers:update', 'teachers:delete',
+    'attendance:read', 'attendance:create', 'attendance:update',
+    'sections:read', 'sections:create', 'sections:update', 'sections:delete',
+    'subjects:read', 'subjects:create', 'subjects:update', 'subjects:delete',
+    'grades:read', 'grades:create', 'grades:update',
+    'devices:read', 'devices:create', 'devices:update', 'devices:delete',
+    'users:read', 'users:manage', 'settings:read', 'settings:update',
+    // Full Transaction & Financial Visibility:
+    'transactions:read', 'transactions:manage',
+  ],
+  [Role.STAFF]: [
+    'students:read', 'students:create', 'students:update',
+    'teachers:read',
+    'sections:read',
+    'attendance:read', 'attendance:create', 'attendance:update',
+    'transactions:read', 'transactions:manage',
+  ],
+  [Role.TEACHER]: [
+    'students:read',
+    'sections:read',
+    'subjects:read',
+    'grades:read', 'grades:create', 'grades:update',
+    'attendance:read', 'attendance:create',
+  ],
+  [Role.STUDENT]: [
+    'attendance:read',
+    'grades:read',
+    'sections:read',
+    'subjects:read',
+  ],
+  [Role.PARENT]: [
+    'attendance:read',
+    'grades:read',
+    'transactions:read',
+  ],
+};
 ```
 
 ---

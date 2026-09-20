@@ -104,12 +104,23 @@ async function verifyPassword(plain: string, hashed: string): Promise<boolean> {
 
 ## RBAC Authorization
 
-### Role Hierarchy
+### Role Hierarchy & Responsibilities
+
 ```
-SUPER_ADMIN → Full platform access, all tenants
-  └── SCHOOL_ADMIN → Full school access
-        ├── REGISTRAR → Student records, enrollment
-        ├── TEACHER → Assigned sections, grades
+SUPER_ADMIN (Platform Scope: tenant_id = null)
+  │  • Complete platform control across all schools/tenants
+  │  • Tenant provisioning, plan tiers, platform-wide analytics & billing
+  │  • Bypasses tenant scoping (* wildcard permissions)
+  │
+  └── SCHOOL_ADMIN (Tenant Scope: tenant_id = school_id)
+        • Dedicated administrator for a specific school
+        • Full authority over ALL modules within the tenant
+        • Full Financial & Transaction Visibility (parent billing, tuition, fees)
+        • Manages staff, students, teachers, academics, RFID hardware
+        │
+        ├── REGISTRAR → Student records, enrollment, section assignment
+        ├── TEACHER → Assigned sections, student grades, class schedules
+        ├── STAFF → Front desk, manual attendance, payment counter
         └── (future) PARENT, STUDENT
 ```
 
@@ -147,19 +158,19 @@ export class RolesGuard implements CanActivate {
 export class StudentsController {
 
   @Get()
-  @Permissions('students.view')
+  @Permissions('students:read')
   findAll() { ... }
 
   @Post()
-  @Permissions('students.create')
+  @Permissions('students:create')
   create() { ... }
 
   @Patch(':id')
-  @Permissions('students.update')
+  @Permissions('students:update')
   update() { ... }
 
   @Delete(':id')
-  @Permissions('students.delete')
+  @Permissions('students:delete')
   remove() { ... }
 }
 ```
@@ -167,20 +178,39 @@ export class StudentsController {
 ### Default Permission Sets per Role
 ```typescript
 export const DEFAULT_PERMISSIONS: Record<Role, string[]> = {
-  SUPER_ADMIN: ['*'],  // Special: all permissions
+  SUPER_ADMIN: ['*'],  // Platform root: all permissions
   SCHOOL_ADMIN: [
-    'students.*', 'teachers.*', 'sections.*', 'subjects.*',
-    'attendance.*', 'rfid.*', 'users.*', 'settings.*',
+    // Full authority over ALL tenant modules:
+    'students:read', 'students:create', 'students:update', 'students:delete',
+    'teachers:read', 'teachers:create', 'teachers:update', 'teachers:delete',
+    'attendance:read', 'attendance:create', 'attendance:update',
+    'sections:read', 'sections:create', 'sections:update', 'sections:delete',
+    'subjects:read', 'subjects:create', 'subjects:update', 'subjects:delete',
+    'grades:read', 'grades:create', 'grades:update',
+    'devices:read', 'devices:create', 'devices:update', 'devices:delete',
+    'users:read', 'users:manage', 'settings:read', 'settings:update',
+    // Full Financial & Transaction Visibility:
+    'transactions:read', 'transactions:manage',
   ],
   REGISTRAR: [
-    'students.view', 'students.create', 'students.update',
-    'sections.view', 'attendance.view',
+    'students:read', 'students:create', 'students:update',
+    'sections:read', 'attendance:read',
   ],
   TEACHER: [
-    'students.view',
-    'sections.view',
-    'attendance.view', 'attendance.manage',
-    'subjects.view',
+    'students:read', 'sections:read', 'subjects:read',
+    'grades:read', 'grades:create', 'grades:update',
+    'attendance:read', 'attendance:create',
+  ],
+  STAFF: [
+    'students:read', 'students:create', 'students:update',
+    'attendance:read', 'attendance:create', 'attendance:update',
+    'transactions:read', 'transactions:manage',
+  ],
+  STUDENT: [
+    'attendance:read', 'grades:read', 'sections:read', 'subjects:read',
+  ],
+  PARENT: [
+    'attendance:read', 'grades:read', 'transactions:read',
   ],
 };
 ```

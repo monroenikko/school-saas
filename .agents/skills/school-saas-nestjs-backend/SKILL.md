@@ -50,11 +50,27 @@ async findAll(tenantId: string) {
 }
 ```
 
+### Tenant & Role Scoping Rules
+
+1. **SUPER_ADMIN (Platform Owner)**:
+   - Controls the entire SaaS application across all schools.
+   - Operates with `tenantId: null` (or can pass `x-tenant-id` header to inspect a specific school).
+   - Manages school provisioning, plan tiers, and global system configurations.
+   - Bypasses all module restrictions (`*` wildcard permissions).
+
+2. **SCHOOL_ADMIN (Tenant Administrator)**:
+   - Every school has its own dedicated admin user(s).
+   - Scoped strictly to their assigned school (`request.tenantId = user.tenantId`).
+   - Has full permissions to **ALL modules for that whole tenant**:
+     - Students, Teachers, Sections, Subjects, Schedules, Attendance, RFID Devices, Users, Settings.
+     - **Full Transaction & Billing Visibility**: Full access to parent billing, tuition records, payment receipts, and financial balances (`transactions:read`, `transactions:manage`).
+   - Zero access to other schools' data.
+
 ### TenantGuard
-- Automatically applied globally via APP_GUARD
-- Extracts `tenantId` from the JWT payload
-- Attaches it to the request object
-- Super admin routes bypass tenant scoping
+- Automatically applied globally via `APP_GUARD`.
+- Validates that non-super-admins have a valid `tenantId` in their JWT.
+- Attaches `request.tenantId` to the incoming request for services to consume.
+- Super admin routes bypass tenant scoping or conditionally target a school.
 
 ## API Response Format
 

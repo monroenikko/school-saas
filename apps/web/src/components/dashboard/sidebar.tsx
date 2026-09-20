@@ -20,6 +20,7 @@ import {
   ShieldCheck,
   LogOut,
   Sparkles,
+  Building2,
 } from 'lucide-react';
 
 interface NavItem {
@@ -72,6 +73,27 @@ export function DashboardSidebar({
   const pathname = usePathname();
   const { user, logout } = useAuth();
 
+  const isSuperAdmin = user?.role === 'SUPER_ADMIN';
+
+  const navGroups: NavGroup[] = [
+    ...(isSuperAdmin
+      ? [
+          {
+            label: 'Platform Administration',
+            items: [
+              {
+                title: 'All Schools / Tenants',
+                href: '/dashboard/tenants',
+                icon: Building2,
+                badge: 'Root',
+              },
+            ],
+          },
+        ]
+      : []),
+    ...NAV_GROUPS,
+  ];
+
   return (
     <aside
       className={`fixed top-0 left-0 bottom-0 z-40 flex flex-col bg-white border-r border-slate-200/90 transition-all duration-300 ease-in-out ${
@@ -101,7 +123,7 @@ export function DashboardSidebar({
 
       {/* Navigation List */}
       <div className="flex-1 overflow-y-auto px-3 py-4 space-y-6">
-        {NAV_GROUPS.map((group) => (
+        {navGroups.map((group) => (
           <div key={group.label}>
             {!isCollapsed && (
               <div className="px-3 mb-2 text-[11px] font-bold tracking-wider text-slate-400 uppercase">
