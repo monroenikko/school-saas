@@ -7,6 +7,11 @@ export class GenerateSF1Dto {
   @IsOptional()
   @IsString()
   sectionId?: string;
+
+  @ApiPropertyOptional({ description: 'Filter by tenant UUID' })
+  @IsOptional()
+  @IsString()
+  tenantId?: string;
 }
 
 export class GenerateSF2Dto {
@@ -26,6 +31,11 @@ export class GenerateSF2Dto {
   @Type(() => Number)
   @IsNumber()
   year?: number;
+
+  @ApiPropertyOptional({ description: 'Filter by tenant UUID' })
+  @IsOptional()
+  @IsString()
+  tenantId?: string;
 }
 
 export class GenerateFinancialReportDto {
@@ -38,6 +48,11 @@ export class GenerateFinancialReportDto {
   @IsOptional()
   @IsString()
   endDate?: string;
+
+  @ApiPropertyOptional({ description: 'Filter by tenant UUID' })
+  @IsOptional()
+  @IsString()
+  tenantId?: string;
 }
 
 export class ExportCSVDto {
@@ -64,4 +79,10 @@ export class ExportCSVDto {
   @IsOptional()
   @Type(() => Number)
   year?: number;
+
+  @ApiPropertyOptional({ description: 'Filter by tenant UUID' })
+  @IsOptional()
+  @IsString()
+  tenantId?: string;
 }
+

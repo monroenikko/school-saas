@@ -59,4 +59,10 @@ export class BatchBadgeQueryDto {
   @IsOptional()
   @IsString()
   sectionId?: string;
+
+  @ApiPropertyOptional({ description: 'Filter by tenant UUID' })
+  @IsOptional()
+  @IsString()
+  tenantId?: string;
 }
+

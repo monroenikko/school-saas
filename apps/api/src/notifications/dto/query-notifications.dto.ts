@@ -29,4 +29,9 @@ export class QueryNotificationsDto {
   @IsOptional()
   @Type(() => Number)
   limit?: number = 20;
+
+  @ApiPropertyOptional({ description: 'Filter by tenant UUID' })
+  @IsOptional()
+  @IsString()
+  tenantId?: string;
 }

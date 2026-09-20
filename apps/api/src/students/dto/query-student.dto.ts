@@ -11,12 +11,12 @@ export class QueryStudentDto {
   @Min(1)
   page?: number = 1;
 
-  @ApiPropertyOptional({ default: 10, minimum: 1, maximum: 100 })
+  @ApiPropertyOptional({ default: 10, minimum: 1, maximum: 250 })
   @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(1)
-  @Max(100)
+  @Max(250)
   limit?: number = 10;
 
   @ApiPropertyOptional({
@@ -45,4 +45,9 @@ export class QueryStudentDto {
   @IsOptional()
   @IsString()
   sortOrder?: 'asc' | 'desc' = 'desc';
+
+  @ApiPropertyOptional({ description: 'Filter by tenant UUID' })
+  @IsOptional()
+  @IsString()
+  tenantId?: string;
 }

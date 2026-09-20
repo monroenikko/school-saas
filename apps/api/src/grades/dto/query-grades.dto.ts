@@ -12,4 +12,9 @@ export class QueryGradesMatrixDto {
   @IsOptional()
   @IsEnum(GradingPeriod)
   period?: GradingPeriod;
+
+  @ApiPropertyOptional({ description: 'Filter by tenant UUID' })
+  @IsOptional()
+  @IsString()
+  tenantId?: string;
 }

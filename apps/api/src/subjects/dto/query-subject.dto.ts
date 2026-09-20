@@ -27,6 +27,11 @@ export class QuerySubjectDto {
   @IsOptional()
   @IsString()
   gradeLevel?: string;
+
+  @ApiPropertyOptional({ description: 'Filter by tenant UUID' })
+  @IsOptional()
+  @IsString()
+  tenantId?: string;
 }
 
 export class QuerySubjectClassDto {
@@ -74,4 +79,9 @@ export class QuerySubjectClassDto {
   @IsOptional()
   @IsString()
   academicYearId?: string;
+
+  @ApiPropertyOptional({ description: 'Filter by tenant UUID' })
+  @IsOptional()
+  @IsString()
+  tenantId?: string;
 }

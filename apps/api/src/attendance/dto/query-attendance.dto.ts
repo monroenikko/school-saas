@@ -47,4 +47,9 @@ export class QueryAttendanceDto {
   @Min(1)
   @IsOptional()
   limit?: number = 20;
+
+  @ApiPropertyOptional({ description: 'Filter by tenant UUID' })
+  @IsOptional()
+  @IsString()
+  tenantId?: string;
 }

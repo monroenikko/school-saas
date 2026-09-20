@@ -41,4 +41,9 @@ export class QueryUsersDto {
   @Max(100)
   @IsOptional()
   limit?: number = 20;
+
+  @ApiPropertyOptional({ description: 'Filter by tenant UUID' })
+  @IsOptional()
+  @IsString()
+  tenantId?: string;
 }
