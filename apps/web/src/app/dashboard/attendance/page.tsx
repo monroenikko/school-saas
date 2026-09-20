@@ -183,7 +183,7 @@ export default function AttendancePage() {
   const loadOptions = useCallback(async () => {
     try {
       const [studentsRes, sectionsRes] = await Promise.all([
-        api.get<any>('/api/students?limit=200'),
+        api.get<any>('/api/students?limit=100'),
         api.get<any>('/api/sections?limit=100'),
       ]);
       if (studentsRes?.data?.data) {
