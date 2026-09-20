@@ -1,173 +1,374 @@
 'use client';
 
-import React, { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import React, { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { useAuth } from '@/context/auth-context';
+import { api } from '@/lib/api';
 import {
-  GraduationCap,
-  LogOut,
-  School,
-  ShieldCheck,
-  User,
-  Activity,
-  Calendar,
   Users,
-  CreditCard,
+  UserCheck,
+  FolderTree,
+  CalendarCheck,
   Radio,
+  CreditCard,
+  ArrowUpRight,
+  Sparkles,
+  CheckCircle2,
+  Clock,
+  ArrowRight,
+  TrendingUp,
+  School,
+  Activity,
+  Plus,
 } from 'lucide-react';
 
-export default function DashboardPage() {
-  const { user, isLoading, logout } = useAuth();
-  const router = useRouter();
+interface DashboardStats {
+  summary: {
+    totalStudents: number;
+    totalTeachers: number;
+    totalSections: number;
+    totalSubjects: number;
+    totalDevices: number;
+    attendance: {
+      present: number;
+      late: number;
+      absent: number;
+      rate: number;
+    };
+  };
+  recentAttendances: Array<{
+    id: string;
+    studentName: string;
+    studentId: string;
+    timeIn: string;
+    timeOut: string | null;
+    status: string;
+    deviceName: string;
+  }>;
+  recentTransactions: Array<{
+    id: string;
+    referenceNo: string;
+    title: string;
+    amount: number;
+    type: string;
+    status: string;
+    studentName: string;
+    paidAt: string | null;
+  }>;
+}
+
+export default function DashboardOverviewPage() {
+  const { user } = useAuth();
+  const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const fetchStats = async () => {
+    try {
+      const res = await api.get<DashboardStats>('/api/dashboard/stats');
+      if (res.success && res.data) {
+        setStats(res.data);
+      }
+    } catch (err) {
+      console.error('Failed to fetch dashboard stats:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    if (!isLoading && !user) {
-      router.push('/login');
-    }
-  }, [user, isLoading, router]);
-
-  if (isLoading || !user) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50 text-slate-900">
-        <div className="flex flex-col items-center gap-3">
-          <div className="w-8 h-8 border-3 border-emerald-600 border-t-transparent rounded-full animate-spin" />
-          <p className="text-sm text-slate-500 font-medium">Verifying session...</p>
-        </div>
-      </div>
-    );
-  }
+    fetchStats();
+  }, []);
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col">
-      {/* Top Navbar */}
-      <header className="border-b border-slate-200/90 bg-white/90 backdrop-blur-xl sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-emerald-600 p-0.5 shadow-md shadow-emerald-600/20">
-              <div className="w-full h-full bg-white rounded-[10px] flex items-center justify-center">
-                <GraduationCap className="w-5 h-5 text-emerald-600" />
-              </div>
-            </div>
-            <div>
-              <span className="font-bold text-slate-900 text-base tracking-tight">EdVance</span>
-              <span className="text-xs text-slate-500 block -mt-1 font-medium">
-                {user.tenantName || 'Platform Administration'}
-              </span>
-            </div>
+    <div className="space-y-6">
+      {/* Top Welcome Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-3xl border border-slate-200/90 shadow-xs">
+        <div>
+          <div className="flex items-center gap-2 text-xs font-semibold text-emerald-700 uppercase tracking-wider mb-1">
+            <Sparkles className="w-3.5 h-3.5" /> Campus Executive Overview
           </div>
-
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2.5 bg-slate-100/80 border border-slate-200 py-1.5 px-3 rounded-full">
-              <div className="w-7 h-7 rounded-full bg-emerald-600 text-white flex items-center justify-center font-bold text-xs">
-                {user.firstName[0]}
-                {user.lastName[0]}
-              </div>
-              <div className="text-left">
-                <div className="text-xs font-semibold text-slate-800 leading-tight">
-                  {user.firstName} {user.lastName}
-                </div>
-                <div className="text-[10px] text-emerald-700 uppercase font-mono font-bold">
-                  {user.role}
-                </div>
-              </div>
-            </div>
-
-            <button
-              onClick={() => logout()}
-              className="p-2 rounded-xl bg-slate-100 hover:bg-rose-50 text-slate-500 hover:text-rose-600 border border-slate-200 transition-all cursor-pointer"
-              title="Sign Out"
-            >
-              <LogOut className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-      </header>
-
-      {/* Main Container */}
-      <main className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full">
-        {/* Welcome Banner */}
-        <div className="relative rounded-3xl bg-gradient-to-r from-emerald-50 via-teal-50/50 to-white border border-emerald-200/80 p-6 sm:p-8 mb-8 overflow-hidden shadow-sm">
-          <div className="relative z-10">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-100 border border-emerald-300/60 text-emerald-800 text-xs font-bold uppercase tracking-wider mb-3">
-              <ShieldCheck className="w-3.5 h-3.5" /> Authentication Verified
-            </div>
-            <h2 className="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight">
-              Welcome back, {user.firstName}!
-            </h2>
-            <p className="text-slate-600 mt-2 text-sm max-w-2xl">
-              You are signed in to <span className="text-slate-900 font-semibold">{user.tenantName || 'School SaaS Platform'}</span>.
-              Your account has <span className="text-emerald-700 font-mono font-bold">{user.role}</span> privileges with multi-tenant data boundaries enforced.
-            </p>
-          </div>
-        </div>
-
-        {/* Status / Quick Overview Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-          <div className="p-5 rounded-2xl bg-white border border-slate-200/90 shadow-xs">
-            <div className="flex items-center justify-between text-slate-500 mb-3">
-              <span className="text-xs font-semibold uppercase tracking-wider">Tenant Scope</span>
-              <School className="w-4 h-4 text-emerald-600" />
-            </div>
-            <div className="text-lg font-bold text-slate-900 truncate">
-              {user.tenantName || 'System-wide'}
-            </div>
-            <div className="text-xs text-slate-500 mt-1 font-mono truncate">
-              ID: {user.tenantId ? user.tenantId.slice(0, 8) + '...' : 'Global'}
-            </div>
-          </div>
-
-          <div className="p-5 rounded-2xl bg-white border border-slate-200/90 shadow-xs">
-            <div className="flex items-center justify-between text-slate-500 mb-3">
-              <span className="text-xs font-semibold uppercase tracking-wider">User Account</span>
-              <User className="w-4 h-4 text-blue-600" />
-            </div>
-            <div className="text-lg font-bold text-slate-900 truncate">
-              {user.email}
-            </div>
-            <div className="text-xs text-emerald-700 mt-1 flex items-center gap-1 font-semibold">
-              <div className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse" /> Active Session
-            </div>
-          </div>
-
-          <div className="p-5 rounded-2xl bg-white border border-slate-200/90 shadow-xs">
-            <div className="flex items-center justify-between text-slate-500 mb-3">
-              <span className="text-xs font-semibold uppercase tracking-wider">RFID Status</span>
-              <Radio className="w-4 h-4 text-purple-600" />
-            </div>
-            <div className="text-lg font-bold text-slate-900">
-              Gate Turnstile
-            </div>
-            <div className="text-xs text-emerald-700 mt-1 font-semibold">
-              Ready for Live Scans
-            </div>
-          </div>
-
-          <div className="p-5 rounded-2xl bg-white border border-slate-200/90 shadow-xs">
-            <div className="flex items-center justify-between text-slate-500 mb-3">
-              <span className="text-xs font-semibold uppercase tracking-wider">Security State</span>
-              <ShieldCheck className="w-4 h-4 text-teal-600" />
-            </div>
-            <div className="text-lg font-bold text-slate-900">
-              JWT + HttpOnly
-            </div>
-            <div className="text-xs text-slate-500 mt-1 font-medium">
-              Token Rotation Active
-            </div>
-          </div>
-        </div>
-
-        {/* Information Callout */}
-        <div className="p-6 rounded-2xl bg-white border border-slate-200/90 shadow-xs text-sm text-slate-600">
-          <h3 className="text-slate-900 font-semibold mb-1 flex items-center gap-2">
-            <Activity className="w-4 h-4 text-emerald-600" />
-            Step 3 Verification Completed
-          </h3>
-          <p>
-            JWT Authentication, Cookie Sessions, Refresh Token Rotation, Swagger API Docs, and Multi-Tenant RBAC Guards are operational in the light theme.
-            In <strong>Step 4</strong>, we will build the full collapsible sidebar navigation, breadcrumbs, and real-time overview analytics!
+          <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight">
+            Good day, {user?.firstName}!
+          </h1>
+          <p className="text-sm text-slate-500 mt-1">
+            Here is the live status of <span className="font-semibold text-slate-800">{user?.tenantName || 'your school'}</span> for SY 2026-2027.
           </p>
         </div>
-      </main>
+
+        <div className="flex items-center gap-2.5">
+          <Link
+            href="/dashboard/attendance"
+            className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shadow-sm shadow-emerald-600/20 transition-all flex items-center gap-2 cursor-pointer"
+          >
+            <Radio className="w-4 h-4" />
+            <span>Live Gate Monitor</span>
+          </Link>
+        </div>
+      </div>
+
+      {/* Primary KPI Stat Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* Total Students */}
+        <div className="p-5 rounded-2xl bg-white border border-slate-200/90 shadow-xs">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+              Total Students
+            </span>
+            <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+              <Users className="w-5 h-5" />
+            </div>
+          </div>
+          <div className="text-3xl font-black text-slate-900 tracking-tight">
+            {loading ? '—' : stats?.summary.totalStudents || 0}
+          </div>
+          <div className="text-xs text-emerald-700 mt-1.5 flex items-center gap-1 font-medium">
+            <CheckCircle2 className="w-3.5 h-3.5" /> 100% active enrolled
+          </div>
+        </div>
+
+        {/* Total Faculty */}
+        <div className="p-5 rounded-2xl bg-white border border-slate-200/90 shadow-xs">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+              Teaching Faculty
+            </span>
+            <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
+              <UserCheck className="w-5 h-5" />
+            </div>
+          </div>
+          <div className="text-3xl font-black text-slate-900 tracking-tight">
+            {loading ? '—' : stats?.summary.totalTeachers || 0}
+          </div>
+          <div className="text-xs text-slate-500 mt-1.5">
+            Active department advisers
+          </div>
+        </div>
+
+        {/* Sections & Offerings */}
+        <div className="p-5 rounded-2xl bg-white border border-slate-200/90 shadow-xs">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+              Active Sections
+            </span>
+            <div className="w-9 h-9 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center">
+              <FolderTree className="w-5 h-5" />
+            </div>
+          </div>
+          <div className="text-3xl font-black text-slate-900 tracking-tight">
+            {loading ? '—' : stats?.summary.totalSections || 0}
+          </div>
+          <div className="text-xs text-slate-500 mt-1.5">
+            {stats?.summary.totalSubjects || 0} Subject classes scheduled
+          </div>
+        </div>
+
+        {/* Today's RFID Attendance Rate */}
+        <div className="p-5 rounded-2xl bg-white border border-slate-200/90 shadow-xs">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+              RFID Attendance Rate
+            </span>
+            <div className="w-9 h-9 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
+              <CalendarCheck className="w-5 h-5" />
+            </div>
+          </div>
+          <div className="flex items-baseline gap-2">
+            <div className="text-3xl font-black text-slate-900 tracking-tight">
+              {loading ? '—' : `${stats?.summary.attendance.rate || 0}%`}
+            </div>
+            <span className="text-xs font-semibold text-slate-500">
+              ({stats?.summary.attendance.present || 0} / {stats?.summary.totalStudents || 0} taps)
+            </span>
+          </div>
+          {/* Progress bar */}
+          <div className="w-full h-1.5 bg-slate-100 rounded-full mt-2 overflow-hidden">
+            <div
+              className="h-full bg-emerald-500 rounded-full transition-all duration-500"
+              style={{ width: `${stats?.summary.attendance.rate || 0}%` }}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Main Grid: RFID Activity & Recent Billing */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Left 2 Cols: Live RFID Gate Feed */}
+        <div className="lg:col-span-2 bg-white rounded-3xl border border-slate-200/90 p-6 shadow-xs">
+          <div className="flex items-center justify-between mb-5">
+            <div>
+              <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                <Radio className="w-4 h-4 text-emerald-600" />
+                Live RFID Gate Tap Activity
+              </h2>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Real-time scans received from school turnstiles & terminal agents
+              </p>
+            </div>
+            <Link
+              href="/dashboard/attendance"
+              className="text-xs font-semibold text-emerald-600 hover:text-emerald-700 flex items-center gap-1"
+            >
+              <span>View full log</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </Link>
+          </div>
+
+          {loading ? (
+            <div className="py-12 text-center text-slate-400 text-sm">
+              Loading tap activity...
+            </div>
+          ) : stats?.recentAttendances && stats.recentAttendances.length > 0 ? (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="border-b border-slate-100 text-slate-400 font-semibold uppercase tracking-wider">
+                    <th className="pb-3 pl-2">Student</th>
+                    <th className="pb-3">Student ID</th>
+                    <th className="pb-3">Gate Terminal</th>
+                    <th className="pb-3">Time In</th>
+                    <th className="pb-3 pr-2 text-right">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {stats.recentAttendances.map((item) => (
+                    <tr key={item.id} className="hover:bg-slate-50/80 transition-colors">
+                      <td className="py-3 pl-2 font-semibold text-slate-900">
+                        {item.studentName}
+                      </td>
+                      <td className="py-3 text-slate-600 font-mono">
+                        {item.studentId}
+                      </td>
+                      <td className="py-3 text-slate-600">
+                        {item.deviceName}
+                      </td>
+                      <td className="py-3 text-slate-600">
+                        {item.timeIn ? new Date(item.timeIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'}
+                      </td>
+                      <td className="py-3 pr-2 text-right">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
+                          {item.status}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="py-12 text-center text-slate-400 text-sm bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+              No RFID taps recorded yet today.
+            </div>
+          )}
+        </div>
+
+        {/* Right Col: Quick Actions & Recent Transactions */}
+        <div className="space-y-6">
+          {/* Quick Operations Box */}
+          <div className="bg-white rounded-3xl border border-slate-200/90 p-5 shadow-xs">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-3">
+              Quick Operations
+            </h3>
+            <div className="grid grid-cols-2 gap-2">
+              <Link
+                href="/dashboard/students"
+                className="p-3 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200/80 text-left transition-colors cursor-pointer"
+              >
+                <div className="w-7 h-7 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center mb-2">
+                  <Plus className="w-4 h-4" />
+                </div>
+                <div className="text-xs font-semibold text-slate-900">Add Student</div>
+                <div className="text-[11px] text-slate-500">LRN & profile</div>
+              </Link>
+
+              <Link
+                href="/dashboard/sections"
+                className="p-3 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200/80 text-left transition-colors cursor-pointer"
+              >
+                <div className="w-7 h-7 rounded-lg bg-purple-100 text-purple-700 flex items-center justify-center mb-2">
+                  <FolderTree className="w-4 h-4" />
+                </div>
+                <div className="text-xs font-semibold text-slate-900">New Section</div>
+                <div className="text-[11px] text-slate-500">Assign adviser</div>
+              </Link>
+
+              <Link
+                href="/dashboard/devices"
+                className="p-3 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200/80 text-left transition-colors cursor-pointer"
+              >
+                <div className="w-7 h-7 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center mb-2">
+                  <Radio className="w-4 h-4" />
+                </div>
+                <div className="text-xs font-semibold text-slate-900">RFID Device</div>
+                <div className="text-[11px] text-slate-500">Pair turnstile</div>
+              </Link>
+
+              <Link
+                href="/dashboard/transactions"
+                className="p-3 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200/80 text-left transition-colors cursor-pointer"
+              >
+                <div className="w-7 h-7 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center mb-2">
+                  <CreditCard className="w-4 h-4" />
+                </div>
+                <div className="text-xs font-semibold text-slate-900">Record Fee</div>
+                <div className="text-[11px] text-slate-500">Tuition & badge</div>
+              </Link>
+            </div>
+          </div>
+
+          {/* Recent Parent Transactions */}
+          <div className="bg-white rounded-3xl border border-slate-200/90 p-5 shadow-xs">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                Recent Billing
+              </h3>
+              <Link
+                href="/dashboard/transactions"
+                className="text-[11px] font-semibold text-emerald-600 hover:text-emerald-700"
+              >
+                View all
+              </Link>
+            </div>
+
+            {stats?.recentTransactions && stats.recentTransactions.length > 0 ? (
+              <div className="space-y-2.5">
+                {stats.recentTransactions.slice(0, 3).map((txn) => (
+                  <div
+                    key={txn.id}
+                    className="p-3 rounded-xl bg-slate-50 border border-slate-200/60 flex items-center justify-between"
+                  >
+                    <div className="truncate mr-2">
+                      <div className="text-xs font-semibold text-slate-800 truncate">
+                        {txn.title}
+                      </div>
+                      <div className="text-[11px] text-slate-500 truncate">
+                        {txn.studentName} • <span className="font-mono text-[10px]">{txn.referenceNo}</span>
+                      </div>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <div className="text-xs font-bold text-slate-900">
+                        ₱{txn.amount.toLocaleString()}
+                      </div>
+                      <span
+                        className={`inline-block text-[9px] font-bold px-1.5 py-0.2 rounded-sm uppercase ${
+                          txn.status === 'COMPLETED'
+                            ? 'bg-emerald-100 text-emerald-800'
+                            : 'bg-amber-100 text-amber-800'
+                        }`}
+                      >
+                        {txn.status}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="py-6 text-center text-slate-400 text-xs">
+                No recent transactions.
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
