@@ -108,3 +108,24 @@ export enum PaymentMethod {
   CREDIT_CARD = 'CREDIT_CARD',
   OTHER = 'OTHER',
 }
+
+export enum NotificationType {
+  ATTENDANCE_TAP = 'ATTENDANCE_TAP',
+  ANNOUNCEMENT = 'ANNOUNCEMENT',
+  PAYMENT = 'PAYMENT',
+  SYSTEM = 'SYSTEM',
+}
+
+export enum NotificationStatus {
+  QUEUED = 'QUEUED',
+  SENT = 'SENT',
+  DELIVERED = 'DELIVERED',
+  FAILED = 'FAILED',
+}
+
+export enum NotificationChannel {
+  SMS = 'SMS',
+  PUSH = 'PUSH',
+  IN_APP = 'IN_APP',
+  EMAIL = 'EMAIL',
+}

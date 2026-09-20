@@ -133,6 +133,32 @@ enum PaymentMethod {
   OTHER
 }
 
+enum NotificationType {
+  ATTENDANCE_TAP
+  ANNOUNCEMENT
+  PAYMENT
+  SYSTEM
+}
+
+enum NotificationStatus {
+  QUEUED
+  SENT
+  DELIVERED
+  FAILED
+}
+
+enum NotificationChannel {
+  SMS
+  PUSH
+  IN_APP
+  EMAIL
+}
+
+enum AnnouncementPriority {
+  STANDARD
+  URGENT
+}
+
 // -----------------------------------------------------------------------------
 // 1. TENANT & CORE USER ACCOUNTS
 // -----------------------------------------------------------------------------
@@ -172,6 +198,8 @@ model Tenant {
   rfidDevices         RfidDevice[]
   attendances         Attendance[]
   rfidScanLogs        RfidScanLog[]
+  notifications       Notification[]
+  announcements       Announcement[]
 
   @@index([status])
   @@map("tenants")
@@ -678,4 +706,55 @@ model RfidScanLog {
   @@index([cardUid])
   @@index([scannedAt])
   @@map("rfid_scan_logs")
+}
+
+// -----------------------------------------------------------------------------
+// 10. NOTIFICATIONS & ANNOUNCEMENTS
+// -----------------------------------------------------------------------------
+
+model Notification {
+  id         String              @id @default(uuid()) @map("id")
+  tenantId   String              @map("tenant_id")
+  userId     String?             @map("user_id")
+  recipient  String              @map("recipient") // Phone/email/device token
+  title      String              @map("title")
+  message    String              @map("message")
+  type       NotificationType    @default(SYSTEM) @map("type")
+  channel    NotificationChannel @default(IN_APP) @map("channel")
+  status     NotificationStatus  @default(QUEUED) @map("status")
+  isRead     Boolean             @default(false) @map("is_read")
+  metadata   Json?               @map("metadata") // { studentId, attendanceId, etc. }
+  createdAt  DateTime            @default(now()) @map("created_at")
+  updatedAt  DateTime            @updatedAt @map("updated_at")
+
+  // Relations
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([tenantId, isRead])
+  @@index([tenantId, type])
+  @@index([tenantId, status])
+  @@index([tenantId, createdAt])
+  @@map("notifications")
+}
+
+model Announcement {
+  id           String               @id @default(uuid()) @map("id")
+  tenantId     String               @map("tenant_id")
+  title        String               @map("title")
+  content      String               @map("content")
+  audience     String               @default("ALL") @map("audience") // ALL, PARENTS, TEACHERS, STUDENTS
+  priority     AnnouncementPriority @default(STANDARD) @map("priority")
+  authorId     String?              @map("author_id")
+  dispatchedAt DateTime?            @map("dispatched_at")
+  createdAt    DateTime             @default(now()) @map("created_at")
+  updatedAt    DateTime             @updatedAt @map("updated_at")
+
+  // Relations
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([tenantId, priority])
+  @@index([tenantId, createdAt])
+  @@map("announcements")
 }

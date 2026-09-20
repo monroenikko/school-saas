@@ -21,6 +21,7 @@ import {
   LogOut,
   Sparkles,
   Building2,
+  Bell,
 } from 'lucide-react';
 
 interface NavItem {
@@ -57,6 +58,7 @@ const NAV_GROUPS: NavGroup[] = [
   {
     label: 'Management',
     items: [
+      { title: 'Notifications', href: '/dashboard/notifications', icon: Bell },
       { title: 'Parent Billing', href: '/dashboard/transactions', icon: CreditCard },
       { title: 'Users & Staff', href: '/dashboard/users', icon: ShieldCheck },
       { title: 'School Settings', href: '/dashboard/settings', icon: Settings },

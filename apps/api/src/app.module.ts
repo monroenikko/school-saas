@@ -16,9 +16,18 @@ import { TransactionsModule } from './transactions/transactions.module';
 import { UsersModule } from './users/users.module';
 import { SettingsModule } from './settings/settings.module';
 
+import { BullModule } from '@nestjs/bullmq';
+import { NotificationsModule } from './notifications/notifications.module';
+
 @Module({
   imports: [
     PrismaModule,
+    BullModule.forRoot({
+      connection: {
+        host: process.env.REDIS_HOST || 'localhost',
+        port: parseInt(process.env.REDIS_PORT || '6379', 10),
+      },
+    }),
     AuthModule,
     DashboardModule,
     StudentsModule,
@@ -32,6 +41,7 @@ import { SettingsModule } from './settings/settings.module';
     TransactionsModule,
     UsersModule,
     SettingsModule,
+    NotificationsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -76,5 +76,16 @@ describe('DashboardHeader', () => {
       expect(screen.getByText(/All Schools \(Global\)/i)).toBeInTheDocument();
     });
   });
+
+  it('toggles notification dropdown when bell icon is clicked', async () => {
+    const { fireEvent } = await import('@testing-library/react');
+    render(<DashboardHeader onMenuToggle={() => {}} />);
+
+    const bellBtn = screen.getByRole('button', { name: /notifications/i });
+    expect(bellBtn).toBeInTheDocument();
+
+    fireEvent.click(bellBtn);
+    expect(screen.getByText('View All Notifications & Dispatch Logs')).toBeInTheDocument();
+  });
 });
 

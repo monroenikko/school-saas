@@ -4,6 +4,7 @@ import {
   ConflictException,
   BadRequestException,
   UnauthorizedException,
+  Optional,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateRfidDeviceDto } from './dto/create-rfid-device.dto';
@@ -12,10 +13,15 @@ import { RfidTapEventDto } from './dto/rfid-tap-event.dto';
 import { AttendanceStatus, DeviceStatus, ScanType } from '@school-saas/shared';
 import * as bcrypt from 'bcryptjs';
 import * as crypto from 'crypto';
+import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class RfidService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional()
+    private readonly notificationsService?: NotificationsService,
+  ) {}
 
   // ==========================================
   // DEVICE MANAGEMENT
@@ -206,6 +212,10 @@ export class RfidService {
           where: { status: 'ACTIVE' },
           include: { section: true },
         },
+        parents: {
+          include: { parent: true },
+          take: 1,
+        },
       },
     });
 
@@ -346,6 +356,31 @@ export class RfidService {
           },
         }),
       ]);
+    }
+
+    // 5. Asynchronously Enqueue Background SMS Notification
+    if (this.notificationsService) {
+      try {
+        const parentPhone =
+          student.guardianPhone ||
+          (student as any).parents?.[0]?.parent?.phone ||
+          student.emergencyContact ||
+          undefined;
+
+        await this.notificationsService.enqueueTapNotification({
+          tenantId: effectiveTenantId,
+          studentId: student.id,
+          studentName: studentFullName,
+          parentPhone,
+          scanType: eventType,
+          attendanceStatus,
+          deviceName: device.name,
+          scannedAt: scanDate.toISOString(),
+        });
+      } catch (notifErr) {
+        // Non-blocking: ensure gate turnstile tap never fails if notification queue is down
+        console.warn('[RfidService] Failed to enqueue tap notification:', notifErr);
+      }
     }
 
     const formattedTime = scanDate.toLocaleTimeString('en-US', {
