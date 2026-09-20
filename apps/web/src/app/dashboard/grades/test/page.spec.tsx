@@ -26,6 +26,8 @@ vi.mock('@/lib/api', () => ({
     get: vi.fn(),
     post: vi.fn(),
     delete: vi.fn(),
+    getActiveTenantId: vi.fn(() => 'tenant-school-1'),
+    setActiveTenantId: vi.fn(),
   },
 }));
 
@@ -426,5 +428,70 @@ describe('GradesPage - Class List, Permissions, Enlistment & Trimestral Gradeshe
         isPublished: false,
       }),
     );
+  });
+
+  it('populates sections based on active tenantId and supports school switcher for Super Admin', async () => {
+    const user = userEvent.setup();
+    mockAuthUser = {
+      id: 'super-admin',
+      firstName: 'Super',
+      lastName: 'Admin',
+      role: 'SUPER_ADMIN',
+      permissions: ['sections:read', 'sections:create', 'sections:update'],
+    };
+
+    vi.mocked(api.get).mockImplementation((url: string) => {
+      if (url.includes('/api/tenants')) {
+        return Promise.resolve({
+          success: true,
+          data: [
+            { id: 'tenant-school-1', name: 'St. Jude International Academy', slug: 'st-jude' },
+            { id: 'tenant-school-2', name: 'Oakwood Academy', slug: 'oakwood' },
+          ],
+        } as any);
+      }
+      if (url.includes('/api/sections')) {
+        return Promise.resolve({
+          success: true,
+          data: [
+            {
+              id: 'sec-1',
+              name: 'Diamond',
+              gradeLevel: 'Grade 7',
+              capacity: 40,
+              studentCount: 38,
+              tenantId: 'tenant-school-1',
+              tenant: { id: 'tenant-school-1', name: 'St. Jude International Academy', slug: 'st-jude' },
+              academicYear: { id: 'ay-1', name: '2026-2027' },
+              adviser: { id: 't-1', firstName: 'Maria', lastName: 'Santos', employeeId: 'EMP-001' },
+            },
+          ],
+        } as any);
+      }
+      return Promise.resolve({ success: true, data: [] } as any);
+    });
+
+    render(<GradesPage />);
+
+    await waitFor(() => {
+      expect(api.get).toHaveBeenCalledWith(
+        expect.stringContaining('/api/sections?limit=100&tenantId=tenant-school-1'),
+      );
+      expect(screen.getByText('Section Diamond')).toBeInTheDocument();
+      expect(screen.getByText('St. Jude International Academy')).toBeInTheDocument();
+    });
+
+    // School switcher should be present for Super Admin
+    const schoolSelect = screen.getByLabelText(/Filter by School/i);
+    expect(schoolSelect).toBeInTheDocument();
+
+    await user.selectOptions(schoolSelect, 'tenant-school-2');
+
+    expect(api.setActiveTenantId).toHaveBeenCalledWith('tenant-school-2');
+    await waitFor(() => {
+      expect(api.get).toHaveBeenCalledWith(
+        expect.stringContaining('tenantId=tenant-school-2'),
+      );
+    });
   });
 });

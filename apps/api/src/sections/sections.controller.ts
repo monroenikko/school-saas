@@ -51,7 +51,8 @@ export class SectionsController {
   @ApiOperation({ summary: 'List sections with grade levels, advisers, and student headcounts' })
   @ApiResponse({ status: 200, description: 'Sections list returned' })
   async findAll(@Req() req: any, @Query() query: QuerySectionDto) {
-    const result = await this.sectionsService.findAll(req.tenantId, query);
+    const tenantId = req.tenantId || query.tenantId;
+    const result = await this.sectionsService.findAll(tenantId, query);
     return {
       success: true,
       data: result.data,
@@ -63,8 +64,9 @@ export class SectionsController {
   @Permissions('sections:read')
   @ApiOperation({ summary: 'List academic years for section school year binding' })
   @ApiResponse({ status: 200, description: 'Academic years returned' })
-  async getAcademicYears(@Req() req: any) {
-    const years = await this.sectionsService.getAcademicYears(req.tenantId);
+  async getAcademicYears(@Req() req: any, @Query('tenantId') queryTenantId?: string) {
+    const tenantId = req.tenantId || queryTenantId;
+    const years = await this.sectionsService.getAcademicYears(tenantId);
     return {
       success: true,
       data: years,
@@ -89,7 +91,8 @@ export class SectionsController {
   @ApiOperation({ summary: 'Create a new class section' })
   @ApiResponse({ status: 201, description: 'Section created successfully' })
   async create(@Req() req: any, @Body() createSectionDto: CreateSectionDto) {
-    const section = await this.sectionsService.create(req.tenantId, createSectionDto);
+    const tenantId = req.tenantId || createSectionDto.tenantId;
+    const section = await this.sectionsService.create(tenantId, createSectionDto);
     return {
       success: true,
       message: 'Section created successfully',

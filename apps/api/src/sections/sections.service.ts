@@ -21,12 +21,14 @@ export class SectionsService {
       academicYearId,
       sortBy = 'gradeLevel',
       sortOrder = 'asc',
+      tenantId: queryTenantId,
     } = query;
 
     const skip = (page - 1) * limit;
+    const effectiveTenantId = tenantId || queryTenantId;
 
     const where: any = {
-      ...(tenantId ? { tenantId } : {}),
+      ...(effectiveTenantId ? { tenantId: effectiveTenantId } : {}),
       ...(gradeLevel ? { gradeLevel } : {}),
       ...(academicYearId ? { academicYearId } : {}),
     };
@@ -46,6 +48,13 @@ export class SectionsService {
         take: limit,
         orderBy: { [sortBy]: sortOrder },
         include: {
+          tenant: {
+            select: {
+              id: true,
+              name: true,
+              slug: true,
+            },
+          },
           academicYear: {
             select: {
               id: true,

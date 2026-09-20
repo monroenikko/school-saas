@@ -60,5 +60,10 @@ export class CreateSectionDto {
   @IsOptional()
   @IsString()
   termId?: string;
+
+  @ApiPropertyOptional({ description: 'Tenant / School UUID (optional, defaults to active tenant)', example: 'tenant-uuid-1' })
+  @IsOptional()
+  @IsString()
+  tenantId?: string;
 }
 

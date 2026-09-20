@@ -93,6 +93,19 @@ describe('SectionsService', () => {
       expect(result.data[0].studentCount).toBe(35);
       expect(result.meta.total).toBe(1);
     });
+
+    it('should query sections scoped to query.tenantId when provided', async () => {
+      prisma.section.findMany.mockResolvedValue([]);
+      prisma.section.count.mockResolvedValue(0);
+
+      await service.findAll('', { page: 1, limit: 10, tenantId: 'tenant-school-2' });
+
+      expect(prisma.section.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ tenantId: 'tenant-school-2' }),
+        }),
+      );
+    });
   });
 
   describe('create', () => {

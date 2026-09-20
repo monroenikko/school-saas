@@ -42,4 +42,9 @@ export class QuerySectionDto {
   @IsOptional()
   @IsString()
   sortOrder?: 'asc' | 'desc' = 'asc';
+
+  @ApiPropertyOptional({ description: 'Filter by tenant/school UUID' })
+  @IsOptional()
+  @IsString()
+  tenantId?: string;
 }

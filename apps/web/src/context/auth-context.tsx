@@ -33,6 +33,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const res = await api.get<AuthUser & { permissions: string[] }>('/api/auth/me');
       if (res.success && res.data) {
         setUser(res.data);
+        if (res.data.tenantId && !api.getActiveTenantId()) {
+          api.setActiveTenantId(res.data.tenantId);
+        }
         dispatch(setReduxCredentials({ user: res.data }));
       } else {
         setUser(null);
@@ -67,6 +70,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     if (res.success && res.data) {
       api.setToken(res.data.tokens.accessToken);
+      if (res.data.user.tenantId) {
+        api.setActiveTenantId(res.data.user.tenantId);
+      }
       setUser(res.data.user);
       dispatch(
         setReduxCredentials({
@@ -83,6 +89,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     if (res.success && res.data) {
       api.setToken(res.data.tokens.accessToken);
+      if (res.data.user.tenantId) {
+        api.setActiveTenantId(res.data.user.tenantId);
+      }
       setUser(res.data.user);
       dispatch(
         setReduxCredentials({
@@ -101,6 +110,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Ignore failure on logout endpoint
     } finally {
       api.setToken(null);
+      api.setActiveTenantId(null);
       setUser(null);
       dispatch(clearReduxCredentials());
       router.push('/login');
