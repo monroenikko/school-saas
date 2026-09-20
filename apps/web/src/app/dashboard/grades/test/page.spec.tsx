@@ -6,6 +6,21 @@ import GradesPage from '../page';
 import { api } from '@/lib/api';
 import { GradingPeriod } from '@school-saas/shared';
 
+let mockAuthUser: any = {
+  id: 'user-admin',
+  firstName: 'Admin',
+  lastName: 'User',
+  role: 'SCHOOL_ADMIN',
+  permissions: ['sections:read', 'sections:create', 'sections:update', 'grades:read', 'grades:create', 'grades:update'],
+};
+
+vi.mock('@/context/auth-context', () => ({
+  useAuth: () => ({
+    user: mockAuthUser,
+    logout: vi.fn(),
+  }),
+}));
+
 vi.mock('@/lib/api', () => ({
   api: {
     get: vi.fn(),
@@ -14,11 +29,27 @@ vi.mock('@/lib/api', () => ({
   },
 }));
 
-describe('GradesPage - Class List, Enlistment & Trimestral Gradesheet', () => {
+describe('GradesPage - Class List, Permissions, Enlistment & Trimestral Gradesheet', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockAuthUser = {
+      id: 'user-admin',
+      firstName: 'Admin',
+      lastName: 'User',
+      role: 'SCHOOL_ADMIN',
+      permissions: ['sections:read', 'sections:create', 'sections:update', 'grades:read', 'grades:create', 'grades:update'],
+    };
 
     vi.mocked(api.get).mockImplementation((url: string) => {
+      if (url.includes('/api/sections/academic-years')) {
+        return Promise.resolve({
+          success: true,
+          data: [
+            { id: 'ay-1', name: '2026-2027', isCurrent: true },
+            { id: 'ay-2', name: '2025-2026', isCurrent: false },
+          ],
+        } as any);
+      }
       if (url.includes('/api/subjects/classes')) {
         return Promise.resolve({
           success: true,
@@ -43,6 +74,7 @@ describe('GradesPage - Class List, Enlistment & Trimestral Gradesheet', () => {
             gradeLevel: 'Grade 7',
             room: 'Room 204',
             capacity: 40,
+            academicYear: { id: 'ay-1', name: '2026-2027' },
             adviser: {
               id: 't-1',
               firstName: 'Roberto',
@@ -79,11 +111,29 @@ describe('GradesPage - Class List, Enlistment & Trimestral Gradesheet', () => {
               room: 'Room 204',
               capacity: 40,
               studentCount: 35,
+              academicYear: { id: 'ay-1', name: '2026-2027' },
               adviser: {
                 id: 't-1',
                 firstName: 'Roberto',
                 lastName: 'Cruz',
                 employeeId: 'EMP-002',
+              },
+            },
+            {
+              id: 'sec-2',
+              name: 'STEM-A',
+              gradeLevel: 'Grade 11',
+              track: 'Academic',
+              strand: 'STEM',
+              room: 'SHS Lab 1',
+              capacity: 45,
+              studentCount: 40,
+              academicYear: { id: 'ay-1', name: '2026-2027' },
+              adviser: {
+                id: 't-2',
+                firstName: 'Elena',
+                lastName: 'Bautista',
+                employeeId: 'EMP-003',
               },
             },
           ],
@@ -94,6 +144,7 @@ describe('GradesPage - Class List, Enlistment & Trimestral Gradesheet', () => {
           success: true,
           data: [
             { id: 't-1', firstName: 'Maria', lastName: 'Santos', employeeId: 'EMP-001' },
+            { id: 't-2', firstName: 'Elena', lastName: 'Bautista', employeeId: 'EMP-003' },
           ],
         } as any);
       }
@@ -154,17 +205,40 @@ describe('GradesPage - Class List, Enlistment & Trimestral Gradesheet', () => {
     });
   });
 
-  it('renders Class List table with sections and actions dropdown', async () => {
+  it('renders Access Restricted when user lacks permission to view class list', async () => {
+    mockAuthUser = {
+      id: 'user-parent',
+      firstName: 'Maria',
+      lastName: 'Parent',
+      role: 'PARENT',
+      permissions: [],
+    };
+
+    render(<GradesPage />);
+    await waitFor(() => {
+      expect(screen.getByText(/Access Restricted/i)).toBeInTheDocument();
+    });
+    expect(screen.queryByText(/Class List & Trimestral Gradesheet/i)).not.toBeInTheDocument();
+  });
+
+  it('renders Class List table with sections, school year, SHS track/strand, and actions dropdown', async () => {
     const user = userEvent.setup();
     render(<GradesPage />);
 
     expect(screen.getByText(/Class List & Trimestral Gradesheet/i)).toBeInTheDocument();
     expect(screen.getByText(/Trimestral Academic Calendar/i)).toBeInTheDocument();
 
-    // Verify sections table
+    // Verify sections table & school year
     await waitFor(() => {
       expect(screen.getByText(/Section Diamond/i)).toBeInTheDocument();
+      expect(screen.getByText(/Section STEM-A/i)).toBeInTheDocument();
     });
+
+    // Check School Year badge
+    expect(screen.getAllByText('2026-2027').length).toBeGreaterThanOrEqual(1);
+
+    // Check SHS Track & Strand badge for Grade 11
+    expect(screen.getByText(/Academic • STEM/i)).toBeInTheDocument();
 
     expect(screen.getByText(/Room 204/i)).toBeInTheDocument();
     expect(screen.getByText(/Roberto Cruz/i)).toBeInTheDocument();
@@ -178,6 +252,60 @@ describe('GradesPage - Class List, Enlistment & Trimestral Gradesheet', () => {
     expect(screen.getByRole('button', { name: /Enlist Students/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Enlist \/ Manage Subjects/i })).toBeInTheDocument();
     expect(screen.getAllByRole('button', { name: /Trimestral Gradesheet/i }).length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('opens Create Grade & Section modal and dynamically displays Track/Strand for Grade 11/12', async () => {
+    const user = userEvent.setup();
+    vi.mocked(api.post).mockResolvedValueOnce({
+      success: true,
+      data: { id: 'sec-new', name: 'Emerald', gradeLevel: 'Grade 11', track: 'Academic', strand: 'STEM' },
+    } as any);
+
+    render(<GradesPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText(/Section Diamond/i)).toBeInTheDocument();
+    });
+
+    const createSectionBtn = screen.getByRole('button', { name: /Create Grade & Section/i });
+    expect(createSectionBtn).toBeInTheDocument();
+    await user.click(createSectionBtn);
+
+    // Verify modal elements
+    expect(screen.getByRole('heading', { name: /Create Grade & Section/i })).toBeInTheDocument();
+    expect(screen.getAllByText(/School Year/i).length).toBeGreaterThanOrEqual(2);
+    expect(screen.getAllByText(/Grade Level/i).length).toBeGreaterThanOrEqual(2);
+    expect(screen.getByText(/Faculty Adviser/i)).toBeInTheDocument();
+
+    // Initially Grade 7: SHS configuration should NOT be present
+    expect(screen.queryByText(/Senior High School Program Configuration/i)).not.toBeInTheDocument();
+
+    // Change grade level to Grade 11
+    const gradeSelect = screen.getByDisplayValue('Grade 7');
+    await user.selectOptions(gradeSelect, 'Grade 11');
+
+    // Senior High Program Configuration should now appear
+    expect(screen.getByText(/Senior High School Program Configuration/i)).toBeInTheDocument();
+    expect(screen.getByText(/Academic Track/i)).toBeInTheDocument();
+
+    // Fill in section name
+    const sectionNameInput = screen.getByPlaceholderText(/e\.g\. Diamond, STEM-A, Rizal/i);
+    await user.type(sectionNameInput, 'Emerald');
+
+    // Submit
+    const saveBtn = screen.getByRole('button', { name: /Save Section/i });
+    await user.click(saveBtn);
+
+    expect(api.post).toHaveBeenCalledWith(
+      '/api/sections',
+      expect.objectContaining({
+        name: 'Emerald',
+        gradeLevel: 'Grade 11',
+        schoolYear: '2026-2027',
+        track: 'Academic',
+        strand: 'STEM',
+      }),
+    );
   });
 
   it('transitions to dedicated Enlist Students view with top search bar and bottom roster div', async () => {

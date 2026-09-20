@@ -46,6 +46,12 @@ export class SectionsService {
         take: limit,
         orderBy: { [sortBy]: sortOrder },
         include: {
+          academicYear: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
           adviser: {
             select: {
               id: true,
@@ -154,6 +160,25 @@ export class SectionsService {
 
     let academicYearId = dto.academicYearId;
 
+    if (dto.schoolYear && !academicYearId) {
+      let ay = await this.prisma.academicYear.findFirst({
+        where: { tenantId: resolvedTenantId, name: dto.schoolYear },
+      });
+      if (!ay) {
+        const startYear = parseInt(dto.schoolYear.split('-')[0]) || new Date().getFullYear();
+        ay = await this.prisma.academicYear.create({
+          data: {
+            tenantId: resolvedTenantId,
+            name: dto.schoolYear,
+            startDate: new Date(`${startYear}-08-01`),
+            endDate: new Date(`${startYear + 1}-05-31`),
+            isCurrent: true,
+          },
+        });
+      }
+      academicYearId = ay.id;
+    }
+
     if (!academicYearId) {
       const currentYear = await this.prisma.academicYear.findFirst({
         where: { tenantId: resolvedTenantId, isCurrent: true },
@@ -199,12 +224,44 @@ export class SectionsService {
         academicYearId,
         name: dto.name,
         gradeLevel: dto.gradeLevel,
+        track: dto.track || null,
+        strand: dto.strand || null,
         room: dto.room,
+        capacity: dto.capacity ?? 40,
         adviserId: dto.adviserId,
         termId: dto.termId,
       },
       include: {
         adviser: true,
+        academicYear: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+      },
+    });
+  }
+
+  async getAcademicYears(tenantId: string) {
+    const resolvedTenantId =
+      tenantId ||
+      (await this.prisma.tenant.findFirst({
+        where: { status: 'ACTIVE' },
+        select: { id: true },
+      }))?.id;
+
+    if (!resolvedTenantId) return [];
+
+    return this.prisma.academicYear.findMany({
+      where: { tenantId: resolvedTenantId },
+      orderBy: { name: 'desc' },
+      select: {
+        id: true,
+        name: true,
+        isCurrent: true,
+        startDate: true,
+        endDate: true,
       },
     });
   }

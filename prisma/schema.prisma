@@ -405,7 +405,10 @@ model Section {
   termId         String?  @map("term_id")
   name           String   @map("name") // e.g. "Diamond", "Rizal"
   gradeLevel     String   @map("grade_level") // e.g. "Grade 7", "Grade 10"
+  track          String?  @map("track") // e.g. "Academic", "TVL", "Arts & Design", "Sports"
+  strand         String?  @map("strand") // e.g. "STEM", "ABM", "HUMSS", "GAS", "ICT"
   room           String?  @map("room")
+  capacity       Int      @default(40) @map("capacity")
   adviserId      String?  @map("adviser_id")
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")

@@ -35,8 +35,10 @@ import {
   ArrowLeft,
   GripVertical,
   Trash2,
+  ShieldAlert,
 } from 'lucide-react';
 import { GradingPeriod, DayOfWeek } from '@school-saas/shared';
+import { useAuth } from '@/context/auth-context';
 
 // ==========================================
 // TYPES & INTERFACES
@@ -93,6 +95,8 @@ export interface SectionItem {
   id: string;
   name: string;
   gradeLevel: string;
+  track?: string | null;
+  strand?: string | null;
   room?: string;
   capacity: number;
   adviser?: {
@@ -101,10 +105,52 @@ export interface SectionItem {
     lastName: string;
     employeeId: string;
   } | null;
+  academicYear?: {
+    id: string;
+    name: string;
+  } | null;
   studentCount: number;
   classCount?: number;
   students?: SectionStudentItem[];
 }
+
+export const SHS_TRACKS = [
+  {
+    id: 'Academic',
+    name: 'Academic Track',
+    strands: [
+      { id: 'STEM', name: 'STEM (Science, Tech, Engineering & Math)' },
+      { id: 'ABM', name: 'ABM (Accountancy, Business & Management)' },
+      { id: 'HUMSS', name: 'HUMSS (Humanities & Social Sciences)' },
+      { id: 'GAS', name: 'GAS (General Academic Strand)' },
+    ],
+  },
+  {
+    id: 'TVL',
+    name: 'TVL (Technical-Vocational-Livelihood)',
+    strands: [
+      { id: 'TVL-ICT', name: 'ICT (Information & Communications Tech)' },
+      { id: 'TVL-HE', name: 'HE (Home Economics)' },
+      { id: 'TVL-IA', name: 'IA (Industrial Arts)' },
+      { id: 'TVL-AFA', name: 'AFA (Agri-Fishery Arts)' },
+    ],
+  },
+  {
+    id: 'Arts & Design',
+    name: 'Arts & Design Track',
+    strands: [
+      { id: 'Visual Arts', name: 'Visual Arts & Media Design' },
+      { id: 'Performing Arts', name: 'Music, Theater & Dance' },
+    ],
+  },
+  {
+    id: 'Sports',
+    name: 'Sports Track',
+    strands: [
+      { id: 'Sports Track', name: 'Sports Coaching & Leadership' },
+    ],
+  },
+];
 
 export interface StudentOption {
   id: string;
@@ -219,6 +265,56 @@ export default function GradesPage() {
   const [activePeriod, setActivePeriod] = useState<GradingPeriod>(GradingPeriod.PRELIM);
   const [localScores, setLocalScores] = useState<Record<string, string>>({});
 
+  // Authentication & Permissions
+  const { user } = useAuth();
+
+  const isSuperAdmin = user?.role === 'SUPER_ADMIN';
+  const isSchoolAdmin = user?.role === 'SCHOOL_ADMIN';
+  const isRegistrar = (user?.role as string) === 'REGISTRAR';
+  const isTeacher = user?.role === 'TEACHER';
+  const isStaff = user?.role === 'STAFF';
+
+  const canViewClassList =
+    !user ||
+    isSuperAdmin ||
+    isSchoolAdmin ||
+    isRegistrar ||
+    isTeacher ||
+    isStaff ||
+    Boolean((user as any)?.permissions?.includes('sections:read')) ||
+    Boolean((user as any)?.permissions?.includes('grades:read'));
+
+  const canCreateSection =
+    !user ||
+    isSuperAdmin ||
+    isSchoolAdmin ||
+    isRegistrar ||
+    Boolean((user as any)?.permissions?.includes('sections:create'));
+
+  const canEnlistStudents =
+    !user ||
+    isSuperAdmin ||
+    isSchoolAdmin ||
+    isRegistrar ||
+    Boolean((user as any)?.permissions?.includes('sections:create')) ||
+    Boolean((user as any)?.permissions?.includes('sections:update'));
+
+  const canManageSubjects =
+    !user ||
+    isSuperAdmin ||
+    isSchoolAdmin ||
+    isRegistrar ||
+    Boolean((user as any)?.permissions?.includes('sections:update')) ||
+    Boolean((user as any)?.permissions?.includes('subjects:create'));
+
+  const canEditGrades =
+    !user ||
+    isSuperAdmin ||
+    isSchoolAdmin ||
+    isTeacher ||
+    Boolean((user as any)?.permissions?.includes('grades:update')) ||
+    Boolean((user as any)?.permissions?.includes('grades:create'));
+
   // Filters & Loading
   const [loading, setLoading] = useState(true);
   const [matrixLoading, setMatrixLoading] = useState(false);
@@ -226,10 +322,28 @@ export default function GradesPage() {
   const [classListSearch, setClassListSearch] = useState('');
   const [classListGradeFilter, setClassListGradeFilter] = useState('ALL');
 
+  // Academic Years
+  const [academicYears, setAcademicYears] = useState<
+    Array<{ id: string; name: string; isCurrent?: boolean }>
+  >([]);
+
   // Modals
+  const [isCreateSectionModalOpen, setIsCreateSectionModalOpen] = useState(false);
   const [isAddSubjectModalOpen, setIsAddSubjectModalOpen] = useState(false);
   const [isReportCardModalOpen, setIsReportCardModalOpen] = useState(false);
   const [reportCardData, setReportCardData] = useState<ReportCardResponse | null>(null);
+
+  // Create Section Form (with School Year & SHS Track/Strand)
+  const [createSectionForm, setCreateSectionForm] = useState({
+    schoolYear: '2026-2027',
+    gradeLevel: 'Grade 7',
+    name: '',
+    track: 'Academic',
+    strand: 'STEM',
+    room: '',
+    capacity: 40,
+    adviserId: '',
+  });
 
   // Add Subject Form
   const [addSubjectForm, setAddSubjectForm] = useState({
@@ -263,17 +377,18 @@ export default function GradesPage() {
     [],
   );
 
-  // 1. Fetch initial options: Classes, Sections, Teachers, Subjects, Students
+  // 1. Fetch initial options: Classes, Sections, Teachers, Subjects, Students, Academic Years
   const fetchInitialData = useCallback(async () => {
     setLoading(true);
     try {
-      const [classesRes, sectionsRes, teachersRes, subjectsRes, studentsRes] =
+      const [classesRes, sectionsRes, teachersRes, subjectsRes, studentsRes, ayRes] =
         await Promise.all([
           api.get<ClassOfferingOption[]>('/api/subjects/classes?limit=100'),
           api.get<SectionItem[]>('/api/sections?limit=100'),
           api.get<TeacherOption[]>('/api/teachers?limit=100'),
           api.get<SubjectOption[]>('/api/subjects?limit=100'),
           api.get<StudentOption[]>('/api/students?limit=250&status=ACTIVE'),
+          api.get<any[]>('/api/sections/academic-years').catch(() => ({ success: false, data: [] })),
         ]);
 
       if (classesRes.success && classesRes.data && classesRes.data.length > 0) {
@@ -293,6 +408,13 @@ export default function GradesPage() {
       }
       if (studentsRes.success && studentsRes.data) {
         setAllStudents(studentsRes.data);
+      }
+      if (ayRes?.success && ayRes?.data && ayRes.data.length > 0) {
+        setAcademicYears(ayRes.data);
+        const curr = ayRes.data.find((a: any) => a.isCurrent);
+        if (curr) {
+          setCreateSectionForm((prev) => ({ ...prev, schoolYear: curr.name }));
+        }
       }
     } catch (err: any) {
       console.error('Failed to load initial data:', err);
@@ -465,6 +587,57 @@ export default function GradesPage() {
     setTimeout(() => setSuccessMsg(null), 2500);
   };
 
+  // Create Grade & Section Submit Handler
+  const handleCreateSectionSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!createSectionForm.name.trim()) {
+      setErrorMsg('Please enter a section name.');
+      return;
+    }
+
+    setSubmitting(true);
+    setErrorMsg(null);
+    try {
+      const isSHS =
+        createSectionForm.gradeLevel === 'Grade 11' ||
+        createSectionForm.gradeLevel === 'Grade 12';
+
+      const payload = {
+        name: createSectionForm.name.trim(),
+        gradeLevel: createSectionForm.gradeLevel,
+        schoolYear: createSectionForm.schoolYear,
+        room: createSectionForm.room.trim() || undefined,
+        capacity: Number(createSectionForm.capacity) || 40,
+        adviserId: createSectionForm.adviserId || undefined,
+        track: isSHS ? createSectionForm.track : undefined,
+        strand: isSHS ? createSectionForm.strand : undefined,
+      };
+
+      const res = await api.post('/api/sections', payload);
+      if (res.success) {
+        setSuccessMsg(`Section ${createSectionForm.name} created successfully!`);
+        setIsCreateSectionModalOpen(false);
+        setCreateSectionForm({
+          schoolYear: academicYears[0]?.name || '2026-2027',
+          gradeLevel: 'Grade 7',
+          name: '',
+          track: 'Academic',
+          strand: 'STEM',
+          room: '',
+          capacity: 40,
+          adviserId: '',
+        });
+        fetchInitialData();
+      } else {
+        setErrorMsg(res.message || 'Failed to create section');
+      }
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Error creating section');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   // Open Add Subject Modal
   const handleOpenAddSubjectModal = () => {
     if (!activeSection) return;
@@ -606,6 +779,18 @@ export default function GradesPage() {
       return matchesGrade && matchesSearch;
     });
   }, [sections, classListGradeFilter, classListSearch]);
+
+  if (!loading && !canViewClassList) {
+    return (
+      <div className="bg-white p-12 rounded-2xl border border-slate-200 text-center space-y-3 animate-fade-in shadow-sm">
+        <ShieldAlert className="w-12 h-12 text-amber-500 mx-auto" />
+        <h2 className="text-lg font-bold text-slate-900">Access Restricted</h2>
+        <p className="text-xs text-slate-500 max-w-md mx-auto">
+          You do not have permission to access the Class List and Trimestral Gradesheet module. Please contact your school administrator or registrar if you believe this is an error.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -751,7 +936,7 @@ export default function GradesPage() {
             </div>
           </div>
 
-          {/* Filter and Search Bar */}
+          {/* Filter and Search Bar with Create Section Button */}
           <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <div className="relative flex-1 max-w-md">
               <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
@@ -764,22 +949,35 @@ export default function GradesPage() {
               />
             </div>
 
-            <div className="flex items-center gap-2 overflow-x-auto pb-1 md:pb-0">
-              {['ALL', 'Grade 7', 'Grade 8', 'Grade 9', 'Grade 10', 'Grade 11', 'Grade 12'].map(
-                (grade) => (
-                  <button
-                    key={grade}
-                    type="button"
-                    onClick={() => setClassListGradeFilter(grade)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${
-                      classListGradeFilter === grade
-                        ? 'bg-emerald-600 text-white shadow-sm'
-                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                    }`}
-                  >
-                    {grade}
-                  </button>
-                ),
+            <div className="flex items-center gap-3 flex-wrap">
+              <div className="flex items-center gap-2 overflow-x-auto pb-1 md:pb-0">
+                {['ALL', 'Grade 7', 'Grade 8', 'Grade 9', 'Grade 10', 'Grade 11', 'Grade 12'].map(
+                  (grade) => (
+                    <button
+                      key={grade}
+                      type="button"
+                      onClick={() => setClassListGradeFilter(grade)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${
+                        classListGradeFilter === grade
+                          ? 'bg-emerald-600 text-white shadow-sm'
+                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                      }`}
+                    >
+                      {grade}
+                    </button>
+                  ),
+                )}
+              </div>
+
+              {canCreateSection && (
+                <button
+                  type="button"
+                  onClick={() => setIsCreateSectionModalOpen(true)}
+                  className="flex items-center gap-1.5 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer shadow-sm shrink-0 whitespace-nowrap"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Create Grade & Section</span>
+                </button>
               )}
             </div>
           </div>
@@ -791,8 +989,9 @@ export default function GradesPage() {
                 <thead>
                   <tr className="border-b border-slate-200 bg-slate-50/80 text-[11px] font-bold text-slate-600 uppercase tracking-wider">
                     <th className="py-3.5 px-4">#</th>
-                    <th className="py-3.5 px-4">Grade Level</th>
+                    <th className="py-3.5 px-4">Grade Level & Track</th>
                     <th className="py-3.5 px-4">Section Name</th>
+                    <th className="py-3.5 px-4">School Year</th>
                     <th className="py-3.5 px-4">Room Location</th>
                     <th className="py-3.5 px-4">Class Adviser</th>
                     <th className="py-3.5 px-4">Student Roster</th>
@@ -813,12 +1012,24 @@ export default function GradesPage() {
                       <tr key={sec.id} className="hover:bg-slate-50/60 transition-colors">
                         <td className="py-4 px-4 font-mono text-slate-500">{idx + 1}</td>
                         <td className="py-4 px-4">
-                          <span className="text-[10px] font-extrabold uppercase tracking-wider text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-md border border-emerald-100">
-                            {sec.gradeLevel}
-                          </span>
+                          <div className="flex flex-col gap-1 items-start">
+                            <span className="text-[10px] font-extrabold uppercase tracking-wider text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-md border border-emerald-100">
+                              {sec.gradeLevel}
+                            </span>
+                            {(sec.track || sec.strand) && (
+                              <span className="text-[9px] font-bold px-2 py-0.5 rounded bg-purple-50 text-purple-700 border border-purple-100 font-mono">
+                                {sec.track ? `${sec.track} • ` : ''}{sec.strand}
+                              </span>
+                            )}
+                          </div>
                         </td>
                         <td className="py-4 px-4 font-bold text-slate-900 text-sm">
                           Section {sec.name}
+                        </td>
+                        <td className="py-4 px-4">
+                          <span className="text-xs font-mono font-medium text-slate-700 bg-slate-100 px-2 py-0.5 rounded-md">
+                            {sec.academicYear?.name || '2026-2027'}
+                          </span>
                         </td>
                         <td className="py-4 px-4 text-slate-600 font-medium">
                           {sec.room || 'Room TBA'}
@@ -827,7 +1038,7 @@ export default function GradesPage() {
                           <div className="font-semibold text-slate-900">
                             {sec.adviser
                               ? `${sec.adviser.firstName} ${sec.adviser.lastName}`
-                              : 'No Adviser Assigned'}
+                              : <span className="text-slate-400 italic">No Adviser Assigned</span>}
                           </div>
                           {sec.adviser && (
                             <div className="text-[10px] text-slate-500 font-mono">
@@ -1767,6 +1978,240 @@ export default function GradesPage() {
                 <span>Print SF9</span>
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ==========================================
+          MODAL: CREATE GRADE & SECTION
+          ========================================== */}
+      {isCreateSectionModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4 animate-fade-in">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 animate-scale-in">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div>
+                <h3 className="text-base font-bold text-slate-900">
+                  Create Grade & Section
+                </h3>
+                <p className="text-xs text-slate-500">
+                  Configure school year, grade level, adviser, and SHS track/strand
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsCreateSectionModalOpen(false)}
+                className="text-slate-400 hover:text-slate-600 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateSectionSubmit} className="py-4 space-y-3.5">
+              {/* School Year & Grade Level */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-semibold text-slate-700 block mb-1">
+                    School Year
+                  </label>
+                  <select
+                    value={createSectionForm.schoolYear}
+                    onChange={(e) =>
+                      setCreateSectionForm({ ...createSectionForm, schoolYear: e.target.value })
+                    }
+                    className="w-full text-xs px-3 py-2 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white"
+                  >
+                    {academicYears.length > 0 ? (
+                      academicYears.map((ay) => (
+                        <option key={ay.id} value={ay.name}>
+                          {ay.name} {ay.isCurrent ? '(Current)' : ''}
+                        </option>
+                      ))
+                    ) : (
+                      <>
+                        <option value="2026-2027">2026-2027 (Current)</option>
+                        <option value="2025-2026">2025-2026</option>
+                        <option value="2027-2028">2027-2028</option>
+                      </>
+                    )}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-slate-700 block mb-1">
+                    Grade Level
+                  </label>
+                  <select
+                    value={createSectionForm.gradeLevel}
+                    onChange={(e) =>
+                      setCreateSectionForm({ ...createSectionForm, gradeLevel: e.target.value })
+                    }
+                    className="w-full text-xs px-3 py-2 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white"
+                  >
+                    {['Grade 7', 'Grade 8', 'Grade 9', 'Grade 10', 'Grade 11', 'Grade 12'].map((g) => (
+                      <option key={g} value={g}>
+                        {g}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Conditional SHS Track & Strand for Grade 11 & Grade 12 */}
+              {(createSectionForm.gradeLevel === 'Grade 11' || createSectionForm.gradeLevel === 'Grade 12') && (
+                <div className="p-3 bg-purple-50/70 border border-purple-200/80 rounded-xl space-y-2.5 animate-fade-in">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-purple-600" />
+                    <span className="text-xs font-bold text-purple-900">
+                      Senior High School Program Configuration
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-[11px] font-semibold text-purple-900 block mb-1">
+                        Track
+                      </label>
+                      <select
+                        value={createSectionForm.track}
+                        onChange={(e) => {
+                          const newTrack = e.target.value;
+                          const found = SHS_TRACKS.find((t) => t.id === newTrack);
+                          setCreateSectionForm({
+                            ...createSectionForm,
+                            track: newTrack,
+                            strand: found?.strands[0]?.id || 'General',
+                          });
+                        }}
+                        className="w-full text-xs px-3 py-2 border border-purple-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-purple-400"
+                      >
+                        {SHS_TRACKS.map((t) => (
+                          <option key={t.id} value={t.id}>
+                            {t.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="text-[11px] font-semibold text-purple-900 block mb-1">
+                        Strand / Specialization
+                      </label>
+                      <select
+                        value={createSectionForm.strand}
+                        onChange={(e) =>
+                          setCreateSectionForm({ ...createSectionForm, strand: e.target.value })
+                        }
+                        className="w-full text-xs px-3 py-2 border border-purple-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-purple-400"
+                      >
+                        {(
+                          SHS_TRACKS.find((t) => t.id === createSectionForm.track)?.strands ||
+                          SHS_TRACKS[0].strands
+                        ).map((s) => (
+                          <option key={s.id} value={s.id}>
+                            {s.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Section Name & Room Location */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-semibold text-slate-700 block mb-1">
+                    Section Name *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Diamond, STEM-A, Rizal"
+                    value={createSectionForm.name}
+                    onChange={(e) =>
+                      setCreateSectionForm({ ...createSectionForm, name: e.target.value })
+                    }
+                    className="w-full text-xs px-3 py-2 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-slate-700 block mb-1">
+                    Classroom / Room
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Room 204, Bldg B"
+                    value={createSectionForm.room}
+                    onChange={(e) =>
+                      setCreateSectionForm({ ...createSectionForm, room: e.target.value })
+                    }
+                    className="w-full text-xs px-3 py-2 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white"
+                  />
+                </div>
+              </div>
+
+              {/* Teacher / Faculty Adviser & Target Capacity */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-semibold text-slate-700 block mb-1">
+                    Faculty Adviser
+                  </label>
+                  <select
+                    value={createSectionForm.adviserId}
+                    onChange={(e) =>
+                      setCreateSectionForm({ ...createSectionForm, adviserId: e.target.value })
+                    }
+                    className="w-full text-xs px-3 py-2 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white"
+                  >
+                    <option value="">No Adviser Assigned (TBA)</option>
+                    {teachers.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.firstName} {t.lastName} ({t.employeeId})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-slate-700 block mb-1">
+                    Capacity Limit
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={100}
+                    value={createSectionForm.capacity}
+                    onChange={(e) =>
+                      setCreateSectionForm({ ...createSectionForm, capacity: Number(e.target.value) })
+                    }
+                    className="w-full text-xs px-3 py-2 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white"
+                  />
+                </div>
+              </div>
+
+              <div className="pt-4 border-t border-slate-100 flex items-center justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setIsCreateSectionModalOpen(false)}
+                  className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="flex items-center gap-2 px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer disabled:opacity-50 shadow-sm"
+                >
+                  {submitting ? (
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Plus className="w-4 h-4" />
+                  )}
+                  <span>Save Section</span>
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

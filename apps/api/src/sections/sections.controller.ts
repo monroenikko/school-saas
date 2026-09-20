@@ -59,6 +59,18 @@ export class SectionsController {
     };
   }
 
+  @Get('academic-years')
+  @Permissions('sections:read')
+  @ApiOperation({ summary: 'List academic years for section school year binding' })
+  @ApiResponse({ status: 200, description: 'Academic years returned' })
+  async getAcademicYears(@Req() req: any) {
+    const years = await this.sectionsService.getAcademicYears(req.tenantId);
+    return {
+      success: true,
+      data: years,
+    };
+  }
+
   @Get(':id')
   @Permissions('sections:read')
   @ApiOperation({ summary: 'Get section details including active student roster' })
